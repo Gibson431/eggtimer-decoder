@@ -3,7 +3,7 @@
 # 🥚 Eggtimer Decoder
 
 **Live decoder for Eggtimer / Eggfinder TX packets**
-*Si1000 · 2-FSK · 9600 baud — from an RTL-SDR or a built-in simulated source*
+_Si1000 · 2-FSK · 9600 baud — from an RTL-SDR or a built-in simulated source_
 
 <img src="assets/demo.png" alt="Eggtimer Decoder GUI showing receiver status and a live list of decoded NMEA packets" width="720">
 
@@ -13,13 +13,13 @@
 
 ## ✨ Overview
 
-Eggtimer Decoder comes with a CLI and a small Qt (PySide6) GUI. You choose the device,
-centre frequency (default 921 MHz) and channel 0-8. Each channel is a row of parameters plus
-a frequency offset from the centre (see [`docs/CHANNELS.md`](docs/CHANNELS.md)).
+Eggtimer Decoder comes with a CLI and a small GUI.
+
+Works with any SDR that [GNU Radio OsmoSDR](https://github.com/osmocom/gr-osmosdr) supports (recommended: [RTL-SDR](https://www.rtl-sdr.com/buy-rtl-sdr-dvb-t-dongles/)).
 
 ## 📦 Install
 
-Needs [mise](https://mise.jdx.dev). GNU Radio, gr-osmosdr and rtl-sdr are installed for you.
+Needs [mise](https://mise.jdx.dev). This will handle all the dependency management for you (hopefully).
 **Linux x86-64 only.**
 
 ```sh
@@ -30,7 +30,6 @@ mise install
 
 > [!NOTE]
 > The first `mise run` below sets up the rest (a one-off download, so it takes a while).
-> You may see a warning that post-link scripts were skipped; that is harmless.
 
 ## 🚀 Use
 
@@ -51,12 +50,12 @@ mise run decode -- run --device rtl=0 --center-freq 921M --channel 0 --gain 30
 
 `run` is the default when only options are given. Useful options:
 
-| Option | Purpose |
-|---|---|
-| `--ppm` | frequency correction |
-| `--log-file PATH` | write JSON lines |
+| Option                 | Purpose                 |
+| ---------------------- | ----------------------- |
+| `--ppm`                | frequency correction    |
+| `--log-file PATH`      | write JSON lines        |
 | `--position-file PATH` | write the last position |
-| `-v`, `-q` | more / less output |
+| `-v`, `-q`             | more / less output      |
 
 Ctrl-C stops. Frequencies accept `k`/`M`/`G` suffixes. `--help` works on every command.
 
@@ -98,14 +97,3 @@ Run `mise tasks` to list them.
 - **Add a source:** implement `SampleSource` (`read(n)` returns complex64, empty array = end; expose
   `sample_rate`), and give `LiveReceiver` a `source_factory` that returns it (see `sim_source.py`).
   Keep the source rate an integer multiple of the channel rate (192 kS/s).
-
-## 📡 Signal
-
-*Measured at ~920.99 MHz.*
-
-```text
-55 55 55 55 55 | 2D D4 | len | payload | CRC-16/XMODEM(len+payload)
-```
-
-Payloads are ≤32-byte chunks of the module's NMEA text stream, so one sentence spans several frames;
-checksum-valid sentences are reassembled. Also seen: `!0>@0>=QUASAR>\r\n` and bare `\r\n` frames (passed through).
