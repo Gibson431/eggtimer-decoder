@@ -3,46 +3,80 @@
 Adding or editing a channel is a data-only change to CHANNELS (see docs/CHANNELS.md).
 """
 
-from dataclasses import dataclass, replace
-from typing import Mapping
+from dataclasses import dataclass
+from typing import Iterable, Mapping
 
 from .config import RadioConfig
 
-NUM_CHANNELS = 9  # channels 0..8
 CENTER_FREQ_HZ = 921_000_000.0  # default centre frequency
 
 
 @dataclass(frozen=True)
 class Channel:
     number: int
-    offset_hz: float  # signal frequency minus centre frequency
+    offset_hz: float  # added to the centre frequency to get the SDR tune frequency; no other effect
     samp_rate: float = 192_000.0
     baud: float = 9_600.0
     deviation: float = 35_000.0  # 2-FSK peak deviation (Hz)
-    verified: bool = False  # True once confirmed against a live capture
 
     def radio_config(self) -> RadioConfig:
         """The receiver's GFSK parameters for this channel."""
-        return RadioConfig(samp_rate=self.samp_rate, baud=self.baud, deviation=self.deviation)
+        return RadioConfig(
+            samp_rate=self.samp_rate, baud=self.baud, deviation=self.deviation
+        )
 
 
-# Channel 0: measured live, signal at 920.99 MHz with a 921 MHz centre.
-_CH0 = Channel(number=0, offset_hz=-10_000.0, verified=True)
+def _build_table(channels: Iterable[Channel]) -> dict[int, Channel]:
+    table: dict[int, Channel] = {}
+    for ch in channels:
+        if (
+            isinstance(ch.number, bool)
+            or not isinstance(ch.number, int)
+            or ch.number < 0
+        ):
+            raise ValueError(f"invalid channel number {ch.number!r}")
+        if ch.number in table:
+            raise ValueError(f"duplicate channel number {ch.number}")
+        table[ch.number] = ch
+    return dict(sorted(table.items()))
 
-# Channels 1-8 are unverified copies of channel 0 until measured.
-CHANNELS: dict[int, Channel] = {0: _CH0, **{n: replace(_CH0, number=n, verified=False) for n in range(1, NUM_CHANNELS)}}
+
+# To add a channel, append one Channel(...) line here. Everything else (CLI, GUI, validation,
+# tests) derives from this list.
+_DEFINED = [
+    # These all seem to increment 250khz, this list is here anyway to help populate other application details
+    Channel(number=0, offset_hz=-15_000.0),
+    Channel(number=1, offset_hz=235_000.0),
+    Channel(number=2, offset_hz=485_000.0),
+    Channel(number=3, offset_hz=735_000.0),
+    Channel(number=4, offset_hz=985_000.0),
+    Channel(number=5, offset_hz=1_235_000.0),
+    Channel(number=6, offset_hz=1_485_000.0),
+    Channel(number=7, offset_hz=1_735_000.0),
+]
+
+CHANNELS: dict[int, Channel] = _build_table(_DEFINED)
+CHANNEL_NUMBERS: tuple[int, ...] = tuple(CHANNELS)
+NUM_CHANNELS = len(CHANNELS)  # kept for convenience; numbers are CHANNEL_NUMBERS
+
+
+def channel_choices(table: Mapping[int, Channel] = CHANNELS) -> list[int]:
+    """Valid channel numbers, ascending."""
+    return sorted(table)
 
 
 def get_channel(number: int, table: Mapping[int, Channel] = CHANNELS) -> Channel:
-    """Look up a channel; raises ValueError if it is not in 0..8 (or not in `table`)."""
-    if isinstance(number, bool) or not isinstance(number, int) or not 0 <= number < NUM_CHANNELS:
-        raise ValueError(f"channel must be an integer 0..{NUM_CHANNELS - 1}, got {number!r}")
-    if number not in table:
-        raise ValueError(f"channel {number} is not defined")
+    """Look up a channel; raises ValueError if it is not defined in `table`."""
+    if isinstance(number, bool) or not isinstance(number, int) or number not in table:
+        raise ValueError(
+            f"channel must be one of {channel_choices(table)}, got {number!r}"
+        )
     return table[number]
 
 
-def channel_params(number: int, table: Mapping[int, Channel] = CHANNELS) -> tuple[RadioConfig, float]:
+def channel_params(
+    number: int, table: Mapping[int, Channel] = CHANNELS
+) -> tuple[RadioConfig, float]:
     """(GFSK RadioConfig, offset_hz) the receiver should use for a channel."""
     ch = get_channel(number, table)
     return ch.radio_config(), ch.offset_hz

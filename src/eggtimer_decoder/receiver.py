@@ -60,7 +60,9 @@ log = logging.getLogger(__name__)
 
 SourceFactory = Callable[[Settings], SampleSource]
 _SENTINEL = object()
-_MIN_METRIC_SAMPLES = 4096  # samples needed after a reset before signal events are meaningful
+_MIN_METRIC_SAMPLES = (
+    4096  # samples needed after a reset before signal events are meaningful
+)
 
 
 def default_source_factory(settings: Settings) -> SampleSource:
@@ -68,14 +70,16 @@ def default_source_factory(settings: Settings) -> SampleSource:
     if settings.device == "sim":
         from .sim_source import SimSource
 
-        return SimSource(channel=settings.channel, center_freq=settings.center_freq_hz)
+        tuned = settings.center_freq_hz + CHANNELS[settings.channel].offset_hz
+        return SimSource(channel=settings.channel, center_freq=tuned, tx_freq=tuned)
     from . import sdr
 
     kwargs = {} if settings.gain is None else {"gain_db": settings.gain}
-    chan_rate = CHANNELS[settings.channel].samp_rate
+    chan = CHANNELS[settings.channel]
+    chan_rate = chan.samp_rate
     return sdr.open_source(  # source rate must be an integer multiple of the channel rate (D24)
         settings.device or None,
-        settings.center_freq_hz,
+        settings.center_freq_hz + chan.offset_hz,  # tuned straight onto the channel
         sample_rate=5 * chan_rate,
         ppm=settings.ppm,
         rate_multiple_of=chan_rate,
@@ -96,6 +100,9 @@ class LiveReceiver:
         self._settings = settings or Settings()
         self._factory = source_factory
         self._table = table
+        # The SDR is tuned to centre + offset_hz, so the signal sits at baseband 0 Hz: the DSP
+        # chain sees offset-free channels.
+        self._dsp_table = {n: replace(c, offset_hz=0.0) for n, c in table.items()}
         self._chunk = chunk_samples
         self._sig_interval = signal_interval
         self._sig_hold = signal_hold
@@ -150,9 +157,18 @@ class LiveReceiver:
                 self._accepting = True
                 self._source = self._decoder = self._metrics = None
                 self._state = ReceiverState.STARTING
-                self._emit(StatusEvent(ReceiverState.STARTING, self._describe("starting")))
-                self._deliverer = threading.Thread(target=self._deliver, args=(self._queue,), name="eggtimer-events", daemon=True)
-                self._worker = threading.Thread(target=self._run, name="eggtimer-receiver", daemon=True)
+                self._emit(
+                    StatusEvent(ReceiverState.STARTING, self._describe("starting"))
+                )
+                self._deliverer = threading.Thread(
+                    target=self._deliver,
+                    args=(self._queue,),
+                    name="eggtimer-events",
+                    daemon=True,
+                )
+                self._worker = threading.Thread(
+                    target=self._run, name="eggtimer-receiver", daemon=True
+                )
                 self._deliverer.start()
                 self._worker.start()
 
@@ -163,7 +179,10 @@ class LiveReceiver:
             self._stop.set()
             with self._lock:
                 self._close_source()
-            if self._worker is not None and self._worker is not threading.current_thread():
+            if (
+                self._worker is not None
+                and self._worker is not threading.current_thread()
+            ):
                 self._worker.join()
             with self._lock:
                 if self._accepting:  # not already ended by an ERROR
@@ -175,11 +194,13 @@ class LiveReceiver:
 
     def set_frequency(self, center_freq: float) -> None:
         with self._lock:
-            new = replace(self._settings, center_freq_hz=center_freq)  # SettingsError is a ValueError
+            new = replace(
+                self._settings, center_freq_hz=center_freq
+            )  # SettingsError is a ValueError
             if self._source is not None:
                 assert self._decoder is not None and self._metrics is not None
-                self._source.tune(new.center_freq_hz)
-                self._decoder.set_center_freq(new.center_freq_hz)
+                self._source.tune(self._tuned(new))
+                self._decoder.set_center_freq(self._tuned(new))
                 self._metrics.reset()
                 self._reset_signal_state()
             self._settings = new
@@ -192,14 +213,12 @@ class LiveReceiver:
             ch = get_channel(channel, self._table)
             src = self._source
             if src is not None:
-                old = self._settings.channel
-                if hasattr(src, "set_channel"):
-                    src.set_channel(channel)
+                old = self._settings
+                self._point_source(src, new)
                 try:
                     self._retarget(src, ch)
                 except ValueError:
-                    if hasattr(src, "set_channel"):
-                        src.set_channel(old)
+                    self._point_source(src, old)
                     raise
             self._settings = new
             self._asm = NmeaAssembler()
@@ -216,7 +235,12 @@ class LiveReceiver:
                 return
             self._state = ReceiverState.RESTARTING
             self._reopen = True
-            self._emit(StatusEvent(ReceiverState.RESTARTING, f"switching to device {device or 'default'!r}"))
+            self._emit(
+                StatusEvent(
+                    ReceiverState.RESTARTING,
+                    f"switching to device {device or 'default'!r}",
+                )
+            )
             self._close_source()  # unblocks the pending read; the worker reopens
 
     # -- helpers (call with self._lock held where they touch state) ---
@@ -259,15 +283,28 @@ class LiveReceiver:
         self._last_present_t = -1e9
         self._last_present: SignalMeasurement | None = None
 
+    def _tuned(self, s: Settings) -> float:
+        """Frequency the SDR is tuned to for ``s``: centre + the channel's offset."""
+        return s.center_freq_hz + get_channel(s.channel, self._table).offset_hz
+
+    def _point_source(self, src: SampleSource, s: Settings) -> None:
+        """Tune ``src`` onto ``s``'s channel (a simulated source also moves its transmitter)."""
+        tuned = self._tuned(s)
+        if hasattr(src, "set_channel"):
+            src.set_channel(s.channel, tx_freq=tuned)
+        src.tune(tuned)
+
     def _retarget(self, src: SampleSource, ch: Channel) -> None:
         """Point the pipeline at ``ch`` (lock held); a ValueError leaves the pipeline unchanged."""
         assert self._decoder is not None and self._metrics is not None
         if src.sample_rate != self._decoder.demod.sample_rate:
-            self._decoder = ChannelDecoder(src.sample_rate, self._settings.center_freq_hz, ch.number, self._table)
-            self._metrics = SignalMetrics(src.sample_rate, ch.offset_hz)
+            self._decoder = ChannelDecoder(
+                src.sample_rate, self._tuned(self._settings), ch.number, self._dsp_table
+            )
+            self._metrics = SignalMetrics(src.sample_rate, 0.0)
         else:
             self._decoder.set_channel(ch.number)
-            self._metrics.set_channel_offset(ch.offset_hz)
+            self._metrics.set_channel_offset(0.0)
         self._reset_signal_state()
 
     # -- delivery thread -----------------------------------------------
@@ -282,7 +319,9 @@ class LiveReceiver:
                 try:
                     cb(event)
                 except Exception:
-                    log.exception("subscriber %r raised on %s", cb, type(event).__name__)
+                    log.exception(
+                        "subscriber %r raised on %s", cb, type(event).__name__
+                    )
 
     # -- worker thread -------------------------------------------------
     def _run(self) -> None:
@@ -325,13 +364,15 @@ class LiveReceiver:
                     continue
                 s = self._settings
                 try:
-                    if src.center_freq != s.center_freq_hz:
-                        src.tune(s.center_freq_hz)
-                    if hasattr(src, "set_channel") and getattr(src, "channel", s.channel) != s.channel:
-                        src.set_channel(s.channel)
-                    ch = get_channel(s.channel, self._table)
-                    self._decoder = ChannelDecoder(src.sample_rate, s.center_freq_hz, s.channel, self._table)
-                    self._metrics = SignalMetrics(src.sample_rate, ch.offset_hz)
+                    if (
+                        src.center_freq != self._tuned(s)
+                        or getattr(src, "channel", s.channel) != s.channel
+                    ):
+                        self._point_source(src, s)
+                    self._decoder = ChannelDecoder(
+                        src.sample_rate, self._tuned(s), s.channel, self._dsp_table
+                    )
+                    self._metrics = SignalMetrics(src.sample_rate, 0.0)
                 except Exception:
                     self._close_one(src)
                     raise
@@ -340,7 +381,9 @@ class LiveReceiver:
                 self._source = src
                 self._reopen = False
                 self._state = ReceiverState.RUNNING
-                self._emit(StatusEvent(ReceiverState.RUNNING, self._describe("receiving")))
+                self._emit(
+                    StatusEvent(ReceiverState.RUNNING, self._describe("receiving"))
+                )
                 return True
 
     def _pump(self) -> None:
@@ -377,12 +420,23 @@ class LiveReceiver:
         mono = time.monotonic()
         if m.present:
             self._last_present_t, self._last_present = mono, m
-        if mono - self._last_signal_t >= self._sig_interval and self._metric_samples >= _MIN_METRIC_SAMPLES:
+        if (
+            mono - self._last_signal_t >= self._sig_interval
+            and self._metric_samples >= _MIN_METRIC_SAMPLES
+        ):
             self._last_signal_t = mono
             present = mono - self._last_present_t <= self._sig_hold
-            shown = self._last_present if present and not m.present and self._last_present else m
+            shown = (
+                self._last_present
+                if present and not m.present and self._last_present
+                else m
+            )
             strength = shown.strength_db if np.isfinite(shown.strength_db) else -200.0
-            self._emit(SignalEvent(float(strength), float(shown.carrier_offset_hz), present, now))
+            self._emit(
+                SignalEvent(
+                    float(strength), float(shown.carrier_offset_hz), present, now
+                )
+            )
 
     def _fail(self, message: str) -> None:
         """Report an ERROR, end reception and let the delivery thread finish."""

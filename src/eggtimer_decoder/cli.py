@@ -18,7 +18,7 @@ import threading
 from pathlib import Path
 from typing import Callable, Sequence
 
-from .channels import CENTER_FREQ_HZ, CHANNELS, NUM_CHANNELS
+from .channels import CENTER_FREQ_HZ, CHANNEL_NUMBERS, CHANNELS
 from .settings import (
     Settings,
     SettingsError,
@@ -53,7 +53,9 @@ def parse_freq(text: str) -> float:
             return float(s[:-1]) * mult
         v = float(s)
     except ValueError:
-        raise ValueError(f"cannot parse frequency {text!r} (try 921e6 or 921M)") from None
+        raise ValueError(
+            f"cannot parse frequency {text!r} (try 921e6 or 921M)"
+        ) from None
     return v * 1e6 if 0 < abs(v) < 1e4 else v
 
 
@@ -70,7 +72,9 @@ def _gain_arg(text: str) -> float | str:
     try:
         return float(text)
     except ValueError:
-        raise argparse.ArgumentTypeError(f"invalid gain {text!r} (a number in dB, or 'auto')") from None
+        raise argparse.ArgumentTypeError(
+            f"invalid gain {text!r} (a number in dB, or 'auto')"
+        ) from None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -87,7 +91,10 @@ def build_parser() -> argparse.ArgumentParser:
         description="Decode live and print packets as they arrive, until Ctrl-C or SIGTERM. "
         "Unset options fall back to EGGTIMER_* environment, then saved settings, then defaults.",
     )
-    r.add_argument("--device", help="device id from 'devices' (e.g. rtl=0); 'sim' = simulated source; default first SDR")
+    r.add_argument(
+        "--device",
+        help="device id from 'devices' (e.g. rtl=0); 'sim' = simulated source; default first SDR",
+    )
     r.add_argument(
         "--center-freq",
         type=_freq_arg,
@@ -97,23 +104,52 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument(
         "--channel",
         type=int,
-        choices=range(NUM_CHANNELS),
-        metavar=f"0..{NUM_CHANNELS - 1}",
-        help="channel number (see 'channels')",
+        choices=CHANNEL_NUMBERS,
+        metavar="N",
+        help=f"channel number, one of {list(CHANNEL_NUMBERS)} (see 'channels')",
     )
-    r.add_argument("--gain", type=_gain_arg, metavar="DB|auto", help="tuner gain in dB, or 'auto' (default)")
-    r.add_argument("--ppm", type=float, help="frequency correction in ppm")
-    r.add_argument("--log-file", metavar="PATH", help="append every event as JSON lines")
-    r.add_argument("--position-file", metavar="PATH", help="keep the last position in this JSON file")
     r.add_argument(
-        "--duration", type=float, metavar="SECONDS", help="stop after this long (default: run until interrupted)"
+        "--gain",
+        type=_gain_arg,
+        metavar="DB|auto",
+        help="tuner gain in dB, or 'auto' (default)",
+    )
+    r.add_argument("--ppm", type=float, help="frequency correction in ppm")
+    r.add_argument(
+        "--log-file", metavar="PATH", help="append every event as JSON lines"
+    )
+    r.add_argument(
+        "--position-file",
+        metavar="PATH",
+        help="keep the last position in this JSON file",
+    )
+    r.add_argument(
+        "--duration",
+        type=float,
+        metavar="SECONDS",
+        help="stop after this long (default: run until interrupted)",
     )
     g = r.add_mutually_exclusive_group()
-    g.add_argument("-v", "--verbose", action="store_true", help="also print debug logging")
-    g.add_argument("-q", "--quiet", action="store_true", help="print only NMEA sentences and errors")
+    g.add_argument(
+        "-v", "--verbose", action="store_true", help="also print debug logging"
+    )
+    g.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="print only NMEA sentences and errors",
+    )
 
-    sub.add_parser("devices", help="list attached SDR devices", description="List attached SDR devices.")
-    sub.add_parser("channels", help="show the channel table", description="Show channel parameters and offsets.")
+    sub.add_parser(
+        "devices",
+        help="list attached SDR devices",
+        description="List attached SDR devices.",
+    )
+    sub.add_parser(
+        "channels",
+        help="show the channel table",
+        description="Show channel parameters and offsets.",
+    )
 
     s = sub.add_parser(
         "settings",
@@ -121,12 +157,16 @@ def build_parser() -> argparse.ArgumentParser:
         description=f"View or change the saved settings file (path: ${CONFIG_ENV} or the default config location).",
     )
     ss = s.add_subparsers(dest="action", metavar="ACTION", required=True)
-    ss.add_parser("show", help="print saved settings (with defaults filled in) and the file path")
+    ss.add_parser(
+        "show", help="print saved settings (with defaults filled in) and the file path"
+    )
     st = ss.add_parser(
         "set",
         help="set KEY=VALUE pairs",
         description="Set one or more settings, e.g. 'settings set channel=3 center_freq_hz=921M gain=auto'. "
-        "Keys: " + ", ".join(f.name for f in dataclasses.fields(Settings)) + ". Use 'none' to unset a path.",
+        "Keys: "
+        + ", ".join(f.name for f in dataclasses.fields(Settings))
+        + ". Use 'none' to unset a path.",
     )
     st.add_argument("pairs", nargs="+", metavar="KEY=VALUE")
     ss.add_parser("reset", help="delete the saved settings file")
@@ -139,7 +179,10 @@ def _cmd_devices(args, out) -> int:
 
     devices = sdr.discover()
     if not devices:
-        print("no SDR devices found (use '--device sim' for the simulated source)", file=out)
+        print(
+            "no SDR devices found (use '--device sim' for the simulated source)",
+            file=out,
+        )
         return 0
     for d in devices:
         lo, hi = d.freq_range
@@ -148,15 +191,21 @@ def _cmd_devices(args, out) -> int:
 
 
 def _cmd_channels(args, out) -> int:
-    print(f"{'ch':>2} {'offset_hz':>10} {'freq_mhz':>9} {'samp_rate':>9} {'baud':>6} {'dev_hz':>7}  verified", file=out)
+    print(
+        f"{'ch':>2} {'offset_hz':>10} {'freq_mhz':>9} {'samp_rate':>9} {'baud':>6} {'dev_hz':>7}",
+        file=out,
+    )
     for n in sorted(CHANNELS):
         c = CHANNELS[n]
         print(
             f"{n:>2} {c.offset_hz:>10.0f} {(CENTER_FREQ_HZ + c.offset_hz) / 1e6:>9.3f} {c.samp_rate:>9.0f} "
-            f"{c.baud:>6.0f} {c.deviation:>7.0f}  {'yes' if c.verified else 'no'}",
+            f"{c.baud:>6.0f} {c.deviation:>7.0f}",
             file=out,
         )
-    print(f"(frequencies assume the default {CENTER_FREQ_HZ / 1e6:g} MHz centre; offset = signal - centre)", file=out)
+    print(
+        f"(frequencies assume the default {CENTER_FREQ_HZ / 1e6:g} MHz centre; tuned frequency = centre + offset)",
+        file=out,
+    )
     return 0
 
 
@@ -173,8 +222,17 @@ def _cmd_settings(args, out) -> int:
     if warning:
         print(f"warning: {warning}", file=sys.stderr)
     if args.action == "show":
-        print(f"# {path}" + ("" if path.exists() else " (not saved yet; showing defaults)"), file=out)
-        print(json.dumps(dataclasses.asdict(resolve_settings(Settings(), values)), indent=2), file=out)
+        print(
+            f"# {path}"
+            + ("" if path.exists() else " (not saved yet; showing defaults)"),
+            file=out,
+        )
+        print(
+            json.dumps(
+                dataclasses.asdict(resolve_settings(Settings(), values)), indent=2
+            ),
+            file=out,
+        )
         return 0
     new = dict(values)
     for pair in args.pairs:
@@ -193,7 +251,9 @@ def _cmd_settings(args, out) -> int:
             if not parsed:
                 raise SettingsError(f"unknown setting {key!r}")
             new[key] = parsed[key]
-    save_settings(resolve_settings(Settings(), new), path)  # validates the whole result first
+    save_settings(
+        resolve_settings(Settings(), new), path
+    )  # validates the whole result first
     print(f"saved {path}", file=out)
     return 0
 
@@ -203,11 +263,16 @@ def _cmd_run(args, out, source_factory=None) -> int:
     from .receiver import LiveReceiver
     from .sinks import ConsoleSink, JsonLogSink, LastPositionStore
 
-    cli = {k: getattr(args, k) for k in ("device", "channel", "gain", "ppm", "log_file", "position_file")}
+    cli = {
+        k: getattr(args, k)
+        for k in ("device", "channel", "gain", "ppm", "log_file", "position_file")
+    }
     cli["center_freq_hz"] = args.center_freq
     cli["verbose"] = True if args.verbose else None
     cli["quiet"] = True if args.quiet else None
-    auto_gain = cli["gain"] == "auto"  # D12: None means "not given", so auto needs its own handling
+    auto_gain = (
+        cli["gain"] == "auto"
+    )  # D12: None means "not given", so auto needs its own handling
     if auto_gain:
         cli["gain"] = None
     settings, warning = load_settings(settings_path(), os.environ, cli)
@@ -224,7 +289,10 @@ def _cmd_run(args, out, source_factory=None) -> int:
         def printer(event):
             if isinstance(event, FrameEvent):
                 return
-            if isinstance(event, StatusEvent) and event.state is not ReceiverState.ERROR:
+            if (
+                isinstance(event, StatusEvent)
+                and event.state is not ReceiverState.ERROR
+            ):
                 return
             console(event)
 
@@ -276,7 +344,9 @@ def _cmd_gui() -> int:
     except ModuleNotFoundError as e:
         if e.name != f"{__package__}.gui":
             raise
-        print("GUI is not available yet. Run 'eggtimer-decoder --help' for the command-line interface.")
+        print(
+            "GUI is not available yet. Run 'eggtimer-decoder --help' for the command-line interface."
+        )
         return 0
     return int(gui.main() or 0)
 

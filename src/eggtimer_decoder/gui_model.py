@@ -23,7 +23,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .channels import NUM_CHANNELS
+from .channels import CHANNEL_NUMBERS
 from .contracts import (
     Event,
     FrameEvent,
@@ -99,7 +99,9 @@ def _fmt_mhz(hz: float) -> str:
     return f"{hz / 1e6:.6f}".rstrip("0").rstrip(".")
 
 
-def settings_to_form(s: Settings, choices: list[tuple[str, str]] | None = None) -> FormValues:
+def settings_to_form(
+    s: Settings, choices: list[tuple[str, str]] | None = None
+) -> FormValues:
     return FormValues(
         device=device_to_label(s.device, choices or device_choices()),
         freq_mhz=_fmt_mhz(s.center_freq_hz),
@@ -123,7 +125,9 @@ def _parse_freq_mhz(text: str) -> float:
     return float(t) * 1e6
 
 
-def parse_form(form: FormValues, base: Settings, choices: list[tuple[str, str]] | None = None) -> FormResult:
+def parse_form(
+    form: FormValues, base: Settings, choices: list[tuple[str, str]] | None = None
+) -> FormResult:
     """Validate ``form`` on top of ``base`` (which supplies the non-form fields, e.g. log_file)."""
     choices = choices or device_choices()
     errors: dict[str, str] = {}
@@ -135,8 +139,11 @@ def parse_form(form: FormValues, base: Settings, choices: list[tuple[str, str]] 
         errors["freq_mhz"] = str(e)
     try:
         kw["channel"] = int(form.channel.strip())
+        if kw["channel"] not in CHANNEL_NUMBERS:
+            raise ValueError
     except ValueError:
-        errors["channel"] = f"channel must be a whole number 0 to {NUM_CHANNELS - 1}"
+        kw.pop("channel", None)
+        errors["channel"] = f"channel must be one of {list(CHANNEL_NUMBERS)}"
     g = form.gain.strip().lower()
     if g in ("", "auto"):
         kw["gain"] = None
@@ -151,7 +158,12 @@ def parse_form(form: FormValues, base: Settings, choices: list[tuple[str, str]] 
         errors["ppm"] = "ppm must be a number"
 
     # Per-field range checks through Settings itself: validate each field alone on top of base.
-    for field_name, form_key in (("center_freq_hz", "freq_mhz"), ("channel", "channel"), ("gain", "gain"), ("ppm", "ppm")):
+    for field_name, form_key in (
+        ("center_freq_hz", "freq_mhz"),
+        ("channel", "channel"),
+        ("gain", "gain"),
+        ("ppm", "ppm"),
+    ):
         if form_key in errors or field_name not in kw:
             continue
         try:
@@ -188,15 +200,27 @@ def format_position(p: Position | None, timestamp: float | None = None) -> str:
 def event_to_row(event: Event) -> DisplayRow | None:
     """Row for the packet list, or None for events that are not listed (signal, position)."""
     if isinstance(event, FrameEvent):
-        return DisplayRow(_clock(event.timestamp), "frame", f"len={len(event.payload):2d} {event.payload!r}")
+        return DisplayRow(
+            _clock(event.timestamp),
+            "frame",
+            f"len={len(event.payload):2d} {event.payload!r}",
+        )
     if isinstance(event, NmeaEvent):
         try:
             pos = parse_gga(event.sentence)
         except (ValueError, IndexError):
             pos = None
-        return DisplayRow(_clock(event.timestamp), "nmea", f"{event.sentence} => {pos}" if pos else event.sentence)
+        return DisplayRow(
+            _clock(event.timestamp),
+            "nmea",
+            f"{event.sentence} => {pos}" if pos else event.sentence,
+        )
     if isinstance(event, StatusEvent):
-        return DisplayRow(_clock(event.timestamp), "status", f"[{event.state.value}] {event.message}".rstrip())
+        return DisplayRow(
+            _clock(event.timestamp),
+            "status",
+            f"[{event.state.value}] {event.message}".rstrip(),
+        )
     return None
 
 
@@ -336,7 +360,11 @@ class Controller:
             self.receiver = self._new_receiver(new)
             if was_running:
                 self.receiver.start()
-            notes.append("gain/ppm changed: receiver restarted" if was_running else "gain/ppm recorded")
+            notes.append(
+                "gain/ppm changed: receiver restarted"
+                if was_running
+                else "gain/ppm recorded"
+            )
         else:
             try:
                 if new.center_freq_hz != old.center_freq_hz:
@@ -347,10 +375,16 @@ class Controller:
                     notes.append(f"channel {new.channel} applied")
                 if new.device != old.device:
                     self.receiver.set_device(new.device or None)
-                    notes.append("device changed: restarting reception" if was_running else "device recorded")
+                    notes.append(
+                        "device changed: restarting reception"
+                        if was_running
+                        else "device recorded"
+                    )
             except ValueError:
                 # Part of the change may have been accepted; keep what the receiver now holds.
-                self.settings = dataclasses.replace(new, **_receiver_view(self.receiver))
+                self.settings = dataclasses.replace(
+                    new, **_receiver_view(self.receiver)
+                )
                 raise
         self.settings = new
         if self.path is not None:
@@ -363,5 +397,9 @@ def _receiver_view(receiver: Receiver) -> dict:
     """Settings fields the receiver reports (LiveReceiver exposes ``settings``); else none."""
     s = getattr(receiver, "settings", None)
     if isinstance(s, Settings):
-        return {"center_freq_hz": s.center_freq_hz, "channel": s.channel, "device": s.device}
+        return {
+            "center_freq_hz": s.center_freq_hz,
+            "channel": s.channel,
+            "device": s.device,
+        }
     return {}

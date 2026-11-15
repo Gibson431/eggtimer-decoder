@@ -6,7 +6,12 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from eggtimer_decoder.channels import CENTER_FREQ_HZ, CHANNELS, NUM_CHANNELS, channel_params
+from eggtimer_decoder.channels import (
+    CENTER_FREQ_HZ,
+    CHANNELS,
+    CHANNEL_NUMBERS,
+    channel_params,
+)
 from eggtimer_decoder.contracts import SampleSource
 from eggtimer_decoder.sim_source import SimSource
 from eggtimer_decoder.simulate import nmea_payloads
@@ -19,7 +24,9 @@ def _mix_down(iq, offset_hz, fs):
 
 
 def _capture(src, seconds=1.0):
-    return src.read(int(src.sample_rate * seconds))  # one full cycle is shorter than 1 s
+    return src.read(
+        int(src.sample_rate * seconds)
+    )  # one full cycle is shorter than 1 s
 
 
 def _mean_freq(iq, fs):
@@ -34,35 +41,50 @@ def _offset_hz(make, n=65536):
     src = make()
     ref = make()
     ref.set_channel(ref.channel, tx_freq=ref.center_freq)
-    return _mean_freq(src.read(n), src.sample_rate) - _mean_freq(ref.read(n), ref.sample_rate)
+    return _mean_freq(src.read(n), src.sample_rate) - _mean_freq(
+        ref.read(n), ref.sample_rate
+    )
 
 
 def test_is_sample_source():
     assert isinstance(SimSource(realtime=False), SampleSource)
 
 
-@pytest.mark.parametrize("ch", range(NUM_CHANNELS))
+@pytest.mark.parametrize("ch", CHANNEL_NUMBERS)
 def test_each_channel_decodes_at_its_offset(ch):
     from eggtimer_decoder.demod_gnuradio import decode
 
     cfg, offset = channel_params(ch)
-    src = SimSource(channel=ch, realtime=False, snr_db=20, carrier_error_hz=500)
+    tuned = CENTER_FREQ_HZ + offset  # the SDR is tuned onto the channel
+    src = SimSource(
+        channel=ch,
+        center_freq=tuned,
+        tx_freq=tuned,
+        realtime=False,
+        snr_db=20,
+        carrier_error_hz=500,
+    )
     iq = _capture(src)
-    assert src.signal_offset_hz == offset
-    assert decode(_mix_down(iq, offset + 500, src.sample_rate), cfg)[: len(nmea_payloads())] == nmea_payloads()
+    assert src.signal_offset_hz == 0
+    assert (
+        decode(_mix_down(iq, 500, src.sample_rate), cfg)[: len(nmea_payloads())]
+        == nmea_payloads()
+    )
 
 
 def test_tune_shifts_signal():
     def make(center=CENTER_FREQ_HZ):
         return SimSource(channel=0, realtime=False, snr_db=40, center_freq=center)
 
-    assert _offset_hz(make) == pytest.approx(-10_000, abs=300)
+    assert _offset_hz(make) == pytest.approx(CHANNELS[0].offset_hz, abs=300)
     src = make()
-    src.tune(CENTER_FREQ_HZ + 5_000)  # transmitter stays put, so it moves to -15 kHz
+    src.tune(CENTER_FREQ_HZ + 5_000)  # transmitter stays put, so it moves to -20 kHz
     ref = make()
     ref.set_channel(0, tx_freq=ref.center_freq)
-    d = _mean_freq(src.read(65536), src.sample_rate) - _mean_freq(ref.read(65536), ref.sample_rate)
-    assert d == pytest.approx(-15_000, abs=300)
+    d = _mean_freq(src.read(65536), src.sample_rate) - _mean_freq(
+        ref.read(65536), ref.sample_rate
+    )
+    assert d == pytest.approx(CHANNELS[0].offset_hz - 5_000, abs=300)
     assert src.center_freq == CENTER_FREQ_HZ + 5_000
     src.tune(CENTER_FREQ_HZ + 1e6)  # signal outside the passband: noise only
     assert np.abs(src.read(4096)).max() < 0.2
@@ -74,13 +96,17 @@ def test_extra_channel_values_reach_signal():
     """Rule 6: a channel with a different offset and GFSK params must drive the signal."""
     from eggtimer_decoder.demod_gnuradio import decode
 
-    odd = replace(CHANNELS[0], number=3, offset_hz=25_000.0, baud=4_800.0, deviation=20_000.0, verified=False)
+    odd = replace(
+        CHANNELS[0], number=3, offset_hz=25_000.0, baud=4_800.0, deviation=20_000.0
+    )
     table = {**CHANNELS, 3: odd}
     src = SimSource(channel=3, realtime=False, snr_db=25, table=table)
     iq = _capture(src)
     cfg, offset = channel_params(3, table)
     assert offset == 25_000.0 and src.sample_rate == odd.samp_rate
-    assert _offset_hz(lambda: SimSource(channel=3, realtime=False, snr_db=40, table=table)) == pytest.approx(25_000, abs=300)
+    assert _offset_hz(
+        lambda: SimSource(channel=3, realtime=False, snr_db=40, table=table)
+    ) == pytest.approx(25_000, abs=300)
     want = nmea_payloads()
     assert decode(_mix_down(iq, offset, src.sample_rate), cfg)[: len(want)] == want
     # Decoding with channel 0's offset or parameters must fail: values are not silently ch0's.
@@ -110,7 +136,9 @@ def test_close_unblocks_read():
     src = SimSource(realtime=True)
     src.read(int(src.sample_rate * 0.01))
     result = []
-    t = threading.Thread(target=lambda: result.append(src.read(int(src.sample_rate * 30))))
+    t = threading.Thread(
+        target=lambda: result.append(src.read(int(src.sample_rate * 30)))
+    )
     t.start()
     time.sleep(0.1)
     src.close()

@@ -28,7 +28,7 @@ from eggtimer_decoder.sdr import DeviceInfo
 
 # -- pure view-model ---------------------------------------------------------
 def test_form_roundtrip():
-    s = Settings(device="sim", center_freq_hz=920.5e6, channel=3, gain=22.5, ppm=-4)
+    s = Settings(device="sim", center_freq_hz=920.5e6, channel=2, gain=22.5, ppm=-4)
     assert parse_form(settings_to_form(s), Settings()).settings == s
 
 
@@ -69,10 +69,23 @@ def test_form_reports_all_errors_at_once():
 def test_form_freq_suffix_and_device_labels():
     infos = [DeviceInfo("rtl=0", "RTL", "rtl=0", (1e6, 2e9), (1e6,))]
     ch = device_choices(infos)
-    assert parse_form(FormValues(freq_mhz="920.99M"), Settings(), ch).settings.center_freq_hz == 920.99e6
-    assert parse_form(FormValues(device=ch[-1][0]), Settings(), ch).settings.device == "rtl=0"
-    assert parse_form(FormValues(device=ch[1][0]), Settings(), ch).settings.device == "sim"
-    assert parse_form(FormValues(device="custom=1"), Settings(), ch).settings.device == "custom=1"
+    assert (
+        parse_form(
+            FormValues(freq_mhz="920.99M"), Settings(), ch
+        ).settings.center_freq_hz
+        == 920.99e6
+    )
+    assert (
+        parse_form(FormValues(device=ch[-1][0]), Settings(), ch).settings.device
+        == "rtl=0"
+    )
+    assert (
+        parse_form(FormValues(device=ch[1][0]), Settings(), ch).settings.device == "sim"
+    )
+    assert (
+        parse_form(FormValues(device="custom=1"), Settings(), ch).settings.device
+        == "custom=1"
+    )
     assert settings_to_form(Settings(device="rtl=0"), ch).device == ch[-1][0]
 
 
@@ -154,11 +167,16 @@ def make_controller(tmp_path, settings=None):
 def test_controller_live_changes_use_setters_and_persist(tmp_path):
     c, made = make_controller(tmp_path)
     c.start()
-    new = Settings(center_freq_hz=920e6, channel=4, device="sim")
+    new = Settings(center_freq_hz=920e6, channel=1, device="sim")
     c.apply(new)
-    assert made[0].calls == ["start", ("freq", 920e6), ("channel", 4), ("device", "sim")]
+    assert made[0].calls == [
+        "start",
+        ("freq", 920e6),
+        ("channel", 1),
+        ("device", "sim"),
+    ]
     assert len(made) == 1  # no restart
-    assert load_settings_file(tmp_path / "s.json")[0]["channel"] == 4
+    assert load_settings_file(tmp_path / "s.json")[0]["channel"] == 1
 
 
 def test_controller_gain_ppm_restarts_receiver(tmp_path):
@@ -183,7 +201,7 @@ def test_controller_rejected_change_not_saved(tmp_path):
     c.start()
     made[0].reject = True
     with pytest.raises(ValueError):
-        c.apply(Settings(channel=5))
+        c.apply(Settings(channel=1))
     assert not (tmp_path / "s.json").exists()
 
 
@@ -194,10 +212,15 @@ def test_controller_with_live_sim_receiver(tmp_path):
         c.start()
         deadline = time.time() + 20
         seen = []
-        while time.time() < deadline and not any(isinstance(e, FrameEvent) for e in seen):
+        while time.time() < deadline and not any(
+            isinstance(e, FrameEvent) for e in seen
+        ):
             seen += c.drain()
             time.sleep(0.05)
-        assert any(isinstance(e, StatusEvent) and e.state == ReceiverState.RUNNING for e in seen)
+        assert any(
+            isinstance(e, StatusEvent) and e.state == ReceiverState.RUNNING
+            for e in seen
+        )
         assert any(isinstance(e, FrameEvent) for e in seen)
         c.apply(Settings(device="sim", channel=2))  # live channel change
         c.apply(Settings(device="sim", channel=2, gain=10.0))  # restart path
@@ -234,17 +257,26 @@ def test_gui_apply_validates_and_persists(qapp, tmp_path):
     from eggtimer_decoder.gui import App
 
     cfg = tmp_path / "s.json"
-    app = App(Settings(device="sim"), receiver_factory=FakeReceiver, path=cfg, discover=lambda: [], autostart=True)
+    app = App(
+        Settings(device="sim"),
+        receiver_factory=FakeReceiver,
+        path=cfg,
+        discover=lambda: [],
+        autostart=True,
+    )
     try:
         app.freq_edit.setText("bogus")
         app.apply()
-        assert "frequency" in app.error_label.text().lower() or "parse" in app.error_label.text().lower()
+        assert (
+            "frequency" in app.error_label.text().lower()
+            or "parse" in app.error_label.text().lower()
+        )
         assert not cfg.exists()
         app.freq_edit.setText("920.5")
-        app.channel_box.setCurrentText("5")
+        app.channel_box.setCurrentText("1")
         app.apply()
         assert app.error_label.text() == ""
-        assert ("channel", 5) in app.controller.receiver.calls
+        assert ("channel", 1) in app.controller.receiver.calls
         assert load_settings_file(cfg)[0]["center_freq_hz"] == 920.5e6
         # events from "another thread" show up after a poll
         app.controller.receiver.subs[0](FrameEvent(b"hi", 1.0))

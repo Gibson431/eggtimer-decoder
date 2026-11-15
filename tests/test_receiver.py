@@ -4,6 +4,7 @@ import time
 import numpy as np
 import pytest
 
+from eggtimer_decoder.channels import CHANNELS
 from eggtimer_decoder.contracts import (
     FrameEvent,
     NmeaEvent,
@@ -91,7 +92,9 @@ def test_start_decodes_everything_then_stops():
     assert col.states()[-1] is ReceiverState.STOPPED
     assert isinstance(col.events[-1], StatusEvent)
     sentences = [e.sentence for e in col.of(NmeaEvent)]
-    assert any(s.startswith("$GNGGA") for s in sentences) and any(s.startswith("$GNRMC") for s in sentences)
+    assert any(s.startswith("$GNGGA") for s in sentences) and any(
+        s.startswith("$GNRMC") for s in sentences
+    )
     pos = col.of(PositionEvent)[0].position
     assert pos.lat == pytest.approx(35.347, abs=1e-3) and pos.satellites == 8
     assert all(e.timestamp > 0 for e in col.events)
@@ -110,7 +113,7 @@ def test_nothing_delivered_after_stop():
     n = len(col.events)
     time.sleep(0.2)
     assert len(col.events) == n
-    rx.set_channel(3)  # recorded only, no event while stopped
+    rx.set_channel(2)  # recorded only, no event while stopped
     rx.stop()
     time.sleep(0.05)
     assert len(col.events) == n
@@ -120,10 +123,10 @@ def test_channel_change_live():
     rx, col = make()
     rx.start()
     assert col.wait_frames(3)
-    rx.set_channel(4)
-    assert rx.settings.channel == 4
-    assert col.wait(lambda: any("channel 4" in e.message for e in col.of(StatusEvent)))
-    msg = [e for e in col.of(StatusEvent) if "channel 4" in e.message]
+    rx.set_channel(1)
+    assert rx.settings.channel == 1
+    assert col.wait(lambda: any("channel 1" in e.message for e in col.of(StatusEvent)))
+    msg = [e for e in col.of(StatusEvent) if "channel 1" in e.message]
     assert msg[0].state is ReceiverState.RUNNING
     assert col.wait_frames(5)
     rx.stop()
@@ -138,7 +141,11 @@ def test_channel_change_with_different_offset_and_rate():
     table = dict(CHANNELS)
     table[2] = replace(CHANNELS[0], number=2, offset_hz=15_000.0, samp_rate=144_000.0)
     # a 144 kS/s channel is fine for a 192 kS/s source only if the source rate follows (D20)
-    rx = LiveReceiver(Settings(device="sim"), lambda s: PacedSim(s.channel, s.center_freq_hz, table=table), table=table)
+    rx = LiveReceiver(
+        Settings(device="sim"),
+        lambda s: PacedSim(s.channel, s.center_freq_hz, table=table),
+        table=table,
+    )
     col = Collector()
     rx.subscribe(col)
     rx.start()
@@ -154,9 +161,15 @@ def test_frequency_change_live():
     rx, col = make()
     rx.start()
     assert col.wait_frames(3)
-    rx.set_frequency(921_002_000.0)  # transmitter now 2 kHz further from the centre than expected
+    rx.set_frequency(
+        921_002_000.0
+    )  # transmitter now 2 kHz further from the centre than expected
     assert rx.settings.center_freq_hz == 921_002_000.0
-    assert col.wait(lambda: any("center frequency 921.002" in e.message for e in col.of(StatusEvent)))
+    assert col.wait(
+        lambda: any(
+            "center frequency 921.002" in e.message for e in col.of(StatusEvent)
+        )
+    )
     assert col.wait_frames(5)
     # a retune that moves the signal out of the passband stops frames; re-selecting the
     # channel re-anchors the simulated transmitter and decoding resumes
@@ -187,16 +200,16 @@ def test_invalid_values_rejected_without_change():
 
 def test_setters_record_when_stopped():
     rx, col = make()
-    rx.set_channel(5)
+    rx.set_channel(1)
     rx.set_frequency(920e6)
     rx.set_device("sim")
     with pytest.raises(ValueError):
         rx.set_channel(11)
-    assert (rx.settings.channel, rx.settings.center_freq_hz) == (5, 920e6)
+    assert (rx.settings.channel, rx.settings.center_freq_hz) == (1, 920e6)
     rx.start()
     assert col.wait_frames(2)
     rx.stop()
-    assert "channel 5" in col.of(StatusEvent)[0].message
+    assert "channel 1" in col.of(StatusEvent)[0].message
 
 
 def test_device_change_restarts():
@@ -411,7 +424,9 @@ def test_signal_absent_for_noise_only():
 
         def read(self, n):
             time.sleep(0.002)
-            return ((self.rng.standard_normal(n) + 1j * self.rng.standard_normal(n)) * 0.01).astype(np.complex64)
+            return (
+                (self.rng.standard_normal(n) + 1j * self.rng.standard_normal(n)) * 0.01
+            ).astype(np.complex64)
 
     rx, col = make(lambda s: Noise(), signal_interval=0.02)
     rx.start()
@@ -422,8 +437,14 @@ def test_signal_absent_for_noise_only():
 
 
 def test_default_factory_sim_and_gain_ppm_passed(monkeypatch):
-    src = default_source_factory(Settings(device="sim", channel=3, center_freq_hz=922e6))
-    assert isinstance(src, SimSource) and src.channel == 3 and src.center_freq == 922e6
+    src = default_source_factory(
+        Settings(device="sim", channel=2, center_freq_hz=922e6)
+    )
+    assert (
+        isinstance(src, SimSource)
+        and src.channel == 2
+        and src.center_freq == 922e6 + CHANNELS[2].offset_hz
+    )
     src.close()
     from eggtimer_decoder import sdr
 
@@ -435,4 +456,11 @@ def test_default_factory_sim_and_gain_ppm_passed(monkeypatch):
 
     monkeypatch.setattr(sdr, "open_source", fake_open)
     default_source_factory(Settings(device="", gain=12.5, ppm=3.0))
-    assert seen == dict(device=None, center=921e6, rate=960_000.0, ppm=3.0, gain_db=12.5, rate_multiple_of=192_000.0)
+    assert seen == dict(
+        device=None,
+        center=921e6 + CHANNELS[0].offset_hz,
+        rate=960_000.0,
+        ppm=3.0,
+        gain_db=12.5,
+        rate_multiple_of=192_000.0,
+    )

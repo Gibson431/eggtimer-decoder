@@ -3,11 +3,17 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from eggtimer_decoder.channels import CHANNELS, NUM_CHANNELS
+from eggtimer_decoder.channels import CHANNELS, CHANNEL_NUMBERS
 from eggtimer_decoder.simulate import make_capture
-from eggtimer_decoder.stream_demod import RESUME_FRAMES_LOST, ChannelDecoder, StreamDemod
+from eggtimer_decoder.stream_demod import (
+    RESUME_FRAMES_LOST,
+    ChannelDecoder,
+    StreamDemod,
+)
 
 FS = 192_000.0
+# The SDR is tuned to centre + offset_hz, so the stock channels reach the demod at baseband 0 Hz.
+Z = {n: replace(c, offset_hz=0.0) for n, c in CHANNELS.items()}
 PAYLOADS = [bytes([65 + i]) * (5 + 3 * i) for i in range(10)]
 
 
@@ -26,26 +32,26 @@ def _run(dec, iq, size):
 
 def _alt_table():
     """Temporary channel 8 differing in offset, baud and deviation (PLAN rule 6)."""
-    alt = replace(CHANNELS[0], number=8, offset_hz=+25_000.0, baud=4_800.0, deviation=20_000.0)
-    return {**CHANNELS, 8: alt}
+    alt = replace(Z[0], number=8, offset_hz=+25_000.0, baud=4_800.0, deviation=20_000.0)
+    return {**Z, 8: alt}
 
 
-@pytest.mark.parametrize("n", range(NUM_CHANNELS))
+@pytest.mark.parametrize("n", CHANNEL_NUMBERS)
 def test_each_channel_end_to_end(n):
-    dec = ChannelDecoder(FS, 921e6, n)
-    assert _run(dec, _iq(CHANNELS[n]), 4096) == PAYLOADS
+    dec = ChannelDecoder(FS, 921e6, n, Z)
+    assert _run(dec, _iq(Z[n]), 4096) == PAYLOADS
 
 
 def test_higher_input_rate_decimates():
-    iq = _iq(CHANNELS[0], fs=768_000.0)
-    assert _run(ChannelDecoder(768_000.0, 921e6, 0), iq, 10_000) == PAYLOADS
+    iq = _iq(Z[0], fs=768_000.0)
+    assert _run(ChannelDecoder(768_000.0, 921e6, 0, Z), iq, 10_000) == PAYLOADS
 
 
 @pytest.mark.parametrize("size", [1, 7, 333, 5000, 10**7])
 def test_chunk_size_independence(size):
-    iq = _iq(CHANNELS[0])[:20_000]
-    ref = StreamDemod(FS, 921e6, 0).process(iq)
-    d = StreamDemod(FS, 921e6, 0)
+    iq = _iq(Z[0])[:20_000]
+    ref = StreamDemod(FS, 921e6, 0, Z).process(iq)
+    d = StreamDemod(FS, 921e6, 0, Z)
     got = np.concatenate([d.process(iq[i : i + size]) for i in range(0, len(iq), size)])
     # Float rounding can flip decisions on pure-noise samples between bursts, so allow a
     # few stray bits there; frames (below) must be identical.
@@ -54,8 +60,10 @@ def test_chunk_size_independence(size):
 
 
 def test_chunk_size_independence_frames():
-    iq = _iq(CHANNELS[3])
-    assert _run(ChannelDecoder(FS, 921e6, 3), iq, 1000) == _run(ChannelDecoder(FS, 921e6, 3), iq, 77_777)
+    iq = _iq(Z[2])
+    assert _run(ChannelDecoder(FS, 921e6, 2, Z), iq, 1000) == _run(
+        ChannelDecoder(FS, 921e6, 2, Z), iq, 77_777
+    )
 
 
 def test_extra_channel_decodes_only_when_selected():
@@ -64,14 +72,14 @@ def test_extra_channel_decodes_only_when_selected():
     assert _run(ChannelDecoder(FS, 921e6, 8, table), iq, 4096) == PAYLOADS
     # wrong channel selected: nothing decodes
     assert _run(ChannelDecoder(FS, 921e6, 0, table), iq, 4096) == []
-    assert _run(ChannelDecoder(FS, 921e6, 7, table), iq, 4096) == []
+    assert _run(ChannelDecoder(FS, 921e6, 2, table), iq, 4096) == []
     # and the altered channel does not decode a stock-channel signal
-    assert _run(ChannelDecoder(FS, 921e6, 8, table), _iq(CHANNELS[0]), 4096) == []
+    assert _run(ChannelDecoder(FS, 921e6, 8, table), _iq(Z[0]), 4096) == []
 
 
 def test_switch_channel_mid_stream_resumes():
     table = _alt_table()
-    a, b = _iq(CHANNELS[0], seed=2), _iq(table[8], seed=3)
+    a, b = _iq(Z[0], seed=2), _iq(table[8], seed=3)
     dec = ChannelDecoder(FS, 921e6, 0, table)
     assert _run(dec, a, 4096) == PAYLOADS
     dec.set_channel(8)
@@ -96,7 +104,7 @@ def test_switch_resume_bound_at_many_cut_points():
 
 
 def test_invalid_channel_rejected_and_state_kept():
-    dec = ChannelDecoder(FS, 921e6, 2)
+    dec = ChannelDecoder(FS, 921e6, 2, Z)
     with pytest.raises(ValueError):
         dec.set_channel(9)
     assert dec.demod.channel.number == 2

@@ -34,10 +34,22 @@ def cfg(tmp_path, monkeypatch):
     return p
 
 
-def test_run_sim_channel3_prints_packets(capsys, tmp_path):
+def test_run_sim_channel2_prints_packets(capsys, tmp_path):
     log, pos = tmp_path / "log.jsonl", tmp_path / "pos.json"
     rc = main(
-        ["run", "--device", "sim", "--channel", "3", "--duration", "3", "--log-file", str(log), "--position-file", str(pos)],
+        [
+            "run",
+            "--device",
+            "sim",
+            "--channel",
+            "2",
+            "--duration",
+            "3",
+            "--log-file",
+            str(log),
+            "--position-file",
+            str(pos),
+        ],
         source_factory=sim_factory,
     )
     out = capsys.readouterr().out
@@ -67,7 +79,9 @@ def test_run_error_exit_code(capsys):
 def test_devices_none(capsys, monkeypatch):
     from eggtimer_decoder import sdr
 
-    monkeypatch.setattr(sdr, "discover", lambda *a, **k: [])  # independent of attached hardware
+    monkeypatch.setattr(
+        sdr, "discover", lambda *a, **k: []
+    )  # independent of attached hardware
     assert main(["devices"]) == 0
     assert "no SDR devices found" in capsys.readouterr().out
 
@@ -84,12 +98,21 @@ def test_devices_lists_found_device(capsys, monkeypatch):
 def test_channels_table(capsys):
     assert main(["channels"]) == 0
     out = capsys.readouterr().out
-    assert out.count("\n") >= 10 and "-10000" in out
+    assert out.count("\n") >= 5 and "-15000" in out
 
 
 @pytest.mark.parametrize(
     "cmd",
-    [[], ["run"], ["devices"], ["channels"], ["settings"], ["settings", "show"], ["settings", "set"], ["settings", "reset"]],
+    [
+        [],
+        ["run"],
+        ["devices"],
+        ["channels"],
+        ["settings"],
+        ["settings", "show"],
+        ["settings", "set"],
+        ["settings", "reset"],
+    ],
 )
 def test_help(cmd, capsys):
     with pytest.raises(SystemExit) as e:
@@ -99,7 +122,9 @@ def test_help(cmd, capsys):
 
 
 def test_no_args_without_gui(capsys, monkeypatch):
-    monkeypatch.setitem(sys.modules, "eggtimer_decoder.gui", None)  # simulate "not importable"
+    monkeypatch.setitem(
+        sys.modules, "eggtimer_decoder.gui", None
+    )  # simulate "not importable"
     assert main([]) == 0
     assert "GUI is not available yet" in capsys.readouterr().out
 
@@ -107,12 +132,16 @@ def test_no_args_without_gui(capsys, monkeypatch):
 def test_settings_round_trip(capsys, cfg):
     assert main(["settings", "show"]) == 0
     assert '"channel": 0' in capsys.readouterr().out
-    assert main(["settings", "set", "channel=3", "center_freq=920.5M", "gain=20"]) == 0
+    assert main(["settings", "set", "channel=2", "center_freq=920.5M", "gain=20"]) == 0
     saved = json.loads(cfg.read_text())
-    assert saved["channel"] == 3 and saved["center_freq_hz"] == 920.5e6 and saved["gain"] == 20
+    assert (
+        saved["channel"] == 2
+        and saved["center_freq_hz"] == 920.5e6
+        and saved["gain"] == 20
+    )
     capsys.readouterr()
     main(["settings", "show"])
-    assert '"channel": 3' in capsys.readouterr().out
+    assert '"channel": 2' in capsys.readouterr().out
     assert main(["settings", "set", "gain=auto"]) == 0
     assert json.loads(cfg.read_text())["gain"] is None
     assert main(["settings", "reset"]) == 0
@@ -136,13 +165,21 @@ def test_saved_settings_used_by_run(capsys):
 
     assert main(["run", "--duration", "0.5"], source_factory=factory) == 0
     assert seen[0].device == "sim" and seen[0].channel == 2
-    main(["run", "--channel", "5", "--duration", "0.5"], source_factory=factory)
-    assert seen[1].channel == 5
+    main(["run", "--channel", "1", "--duration", "0.5"], source_factory=factory)
+    assert seen[1].channel == 1
 
 
 @pytest.mark.parametrize(
     "text,hz",
-    [("921e6", 921e6), ("921M", 921e6), ("920.99MHz", 920.99e6), ("433k", 433e3), ("0.921G", 921e6), ("921", 921e6), ("921000000", 921e6)],
+    [
+        ("921e6", 921e6),
+        ("921M", 921e6),
+        ("920.99MHz", 920.99e6),
+        ("433k", 433e3),
+        ("0.921G", 921e6),
+        ("921", 921e6),
+        ("921000000", 921e6),
+    ],
 )
 def test_parse_freq(text, hz):
     assert parse_freq(text) == pytest.approx(hz)
@@ -154,5 +191,7 @@ def test_parse_freq_bad():
 
 
 def test_no_args_launches_gui(monkeypatch):
-    monkeypatch.setitem(sys.modules, "eggtimer_decoder.gui", types.SimpleNamespace(main=lambda: 7))
+    monkeypatch.setitem(
+        sys.modules, "eggtimer_decoder.gui", types.SimpleNamespace(main=lambda: 7)
+    )
     assert main([]) == 7

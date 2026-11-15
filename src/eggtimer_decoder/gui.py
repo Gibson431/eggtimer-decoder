@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import sdr
-from .channels import NUM_CHANNELS
+from .channels import CHANNEL_NUMBERS
 from .contracts import Event, Receiver, ReceiverState
 from .gui_model import (
     Controller,
@@ -76,7 +76,9 @@ class App(QMainWindow):
         super().__init__()
         self.store = LastPositionStore(settings.position_file)
         self.controller = Controller(settings, receiver_factory, path, [self.store])
-        self.status = StatusModel(position=self.store.position, position_time=self.store.timestamp)
+        self.status = StatusModel(
+            position=self.store.position, position_time=self.store.timestamp
+        )
         self.choices = device_choices()
         self._discover = discover
         self._found: queue.Queue = queue.Queue()
@@ -107,7 +109,7 @@ class App(QMainWindow):
         self.device_box.setEditable(True)
         self.freq_edit = QLineEdit()
         self.channel_box = QComboBox()
-        self.channel_box.addItems([str(i) for i in range(NUM_CHANNELS)])
+        self.channel_box.addItems([str(i) for i in CHANNEL_NUMBERS])
         self.gain_edit = QLineEdit()
         self.ppm_edit = QLineEdit()
         rescan = QPushButton("Rescan")
@@ -256,7 +258,11 @@ class App(QMainWindow):
         self.status_labels["offset"].setText(s.offset_text())
         self.status_labels["position"].setText(s.position_text())
         self.status_labels["counts"].setText(s.counts_text())
-        self.run_btn.setText("Stop" if s.state not in (ReceiverState.STOPPED, ReceiverState.ERROR) else "Start")
+        self.run_btn.setText(
+            "Stop"
+            if s.state not in (ReceiverState.STOPPED, ReceiverState.ERROR)
+            else "Start"
+        )
 
     def close_app(self) -> None:
         if self._closed:
