@@ -287,3 +287,43 @@ def test_gui_apply_validates_and_persists(qapp, tmp_path):
         assert app.tree.topLevelItemCount() >= 1
     finally:
         app.close_app()
+
+
+def test_gui_kind_filter(qapp, tmp_path):
+    from eggtimer_decoder.gui import App
+
+    app = App(
+        Settings(device="sim"),
+        receiver_factory=FakeReceiver,
+        path=tmp_path / "s.json",
+        discover=lambda: [],
+        autostart=True,
+    )
+    try:
+        app._handle(FrameEvent(b"hi", 1.0))
+        app._handle(StatusEvent(ReceiverState.RUNNING, "x"))
+        kinds = [
+            app.tree.topLevelItem(i).text(1)
+            for i in range(app.tree.topLevelItemCount())
+        ]
+        assert "frame" in kinds and "status" in kinds
+
+        app.set_kind_filter("frame")
+        assert app.tree.headerItem().text(1) == "Kind: frame"
+        hidden = {
+            app.tree.topLevelItem(i).text(1): app.tree.topLevelItem(i).isHidden()
+            for i in range(app.tree.topLevelItemCount())
+        }
+        assert hidden["frame"] is False and hidden["status"] is True
+
+        app._handle(StatusEvent(ReceiverState.RUNNING, "y"))  # new rows obey the filter
+        assert app.tree.topLevelItem(app.tree.topLevelItemCount() - 1).isHidden()
+
+        app.set_kind_filter(None)
+        assert not any(
+            app.tree.topLevelItem(i).isHidden()
+            for i in range(app.tree.topLevelItemCount())
+        )
+        assert app.tree.headerItem().text(1) == "Kind"
+    finally:
+        app.close_app()

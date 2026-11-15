@@ -16,7 +16,8 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QPoint, Qt, QTimer
+from PySide6.QtGui import QActionGroup
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -26,6 +27,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QPushButton,
     QTreeWidget,
     QTreeWidgetItem,
@@ -53,6 +55,8 @@ __all__ = ["App", "main"]
 
 POLL_MS = 50
 MAX_ROWS = 1000
+KIND_COLUMN = 1
+KINDS = ("nmea", "frame", "status")
 AUTOCLOSE_ENV = "EGGTIMER_GUI_AUTOCLOSE_MS"
 STATUS_ROWS = (
     ("state", "Receiver"),
@@ -164,8 +168,42 @@ class App(QMainWindow):
         self.tree.setRootIsDecorated(False)
         self.tree.header().resizeSection(0, 90)
         self.tree.header().resizeSection(1, 70)
+        self.kind_filter: str | None = None  # None = show all kinds
+        self.tree.header().setSectionsClickable(True)
+        self.tree.header().sectionClicked.connect(self._header_clicked)
         lv.addWidget(self.tree)
         outer.addWidget(lst, 1)
+
+    # -- kind filter -------------------------------------------------
+    def _header_clicked(self, section: int) -> None:
+        if section != KIND_COLUMN:
+            return
+        header = self.tree.header()
+        menu = QMenu(self)
+        group = QActionGroup(menu)
+        group.setExclusive(True)
+        for label, value in [("All", None), *((k, k) for k in KINDS)]:
+            action = menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(value == self.kind_filter)
+            action.triggered.connect(lambda _=False, v=value: self.set_kind_filter(v))
+            group.addAction(action)
+        x = header.sectionViewportPosition(section)
+        menu.exec(header.viewport().mapToGlobal(QPoint(x, header.height())))
+
+    def set_kind_filter(self, kind: str | None) -> None:
+        """Show only rows of ``kind`` (None shows all)."""
+        self.kind_filter = kind
+        self.tree.headerItem().setText(
+            KIND_COLUMN, "Kind" if kind is None else f"Kind: {kind}"
+        )
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            item.setHidden(not self._kind_visible(item.text(KIND_COLUMN)))
+        self.tree.scrollToBottom()
+
+    def _kind_visible(self, kind: str) -> bool:
+        return self.kind_filter is None or kind == self.kind_filter
 
     # -- form --------------------------------------------------------
     def _load_form(self, s: Settings) -> None:
@@ -246,7 +284,9 @@ class App(QMainWindow):
         if row is not None:
             item = QTreeWidgetItem([row.time, row.kind, row.text])
             self.tree.addTopLevelItem(item)
-            self.tree.scrollToItem(item)
+            item.setHidden(not self._kind_visible(row.kind))
+            if not item.isHidden():
+                self.tree.scrollToItem(item)
             extra = self.tree.topLevelItemCount() - MAX_ROWS
             for _ in range(max(extra, 0)):
                 self.tree.takeTopLevelItem(0)
