@@ -1,12 +1,13 @@
 # Eggtimer Decoder
 
 Decodes Eggtimer (Si1000, 2-FSK) packets from complex baseband IQ.
-Input is a simulated capture by default; `--source rtlsdr` reads from an RTL-SDR (default 920.99 MHz).
+Run `eggtimer-decoder --help` for the CLI: `run` (default when only options are given),
+`devices`, `channels`, `settings show|set|reset`. With no arguments it opens the GUI (not available yet).
 
-    mise install          # installs pixi
-    mise run decode       # decode a simulated capture
+    mise run decode -- --device sim --channel 3 --duration 5   # simulated source
+    mise run decode -- devices
+    mise run decode -- --center-freq 921M --channel 0 --gain auto
     mise run test    # pytest
-    mise run decode --source rtlsdr --freq 433.0e6 --seconds 10   # extra args go to the app
 
 The mise tasks call `pixi run` directly (tasks `decode` and `test` are defined in `pyproject.toml`).
 GNU Radio comes from conda-forge via pixi (config in `pyproject.toml` under `[tool.pixi]`).
