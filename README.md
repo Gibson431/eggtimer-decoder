@@ -70,7 +70,7 @@ All code is in `src/eggtimer_decoder/`. The core knows nothing about the interfa
 - `receiver.py`: `LiveReceiver`, which ties it together; frequency/channel change apply live, device change restarts.
 - `sinks.py`: `ConsoleSink`, `JsonLogSink`, `LastPositionStore` (plain `Event -> None` callables).
 - `cli.py`: argparse entry point; `gui.py` (tkinter widgets) and `gui_model.py` (testable view model).
-- `config.py`, `demod_gnuradio.py`, `rtlsdr.py`, `simulate.py`: legacy offline/capture helpers.
+- `config.py` (`RadioConfig`, used by channels), `simulate.py` (signal generator behind the simulated source), `demod_gnuradio.py` (offline GNU Radio decode, used in tests), `rtlsdr.py` (original one-shot capture; superseded by `sdr.py`).
 
 ### Extending
 
