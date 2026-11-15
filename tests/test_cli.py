@@ -64,9 +64,21 @@ def test_run_error_exit_code(capsys):
     assert "boom" in capsys.readouterr().out
 
 
-def test_devices_none(capsys):
+def test_devices_none(capsys, monkeypatch):
+    from eggtimer_decoder import sdr
+
+    monkeypatch.setattr(sdr, "discover", lambda *a, **k: [])  # independent of attached hardware
     assert main(["devices"]) == 0
     assert "no SDR devices found" in capsys.readouterr().out
+
+
+def test_devices_lists_found_device(capsys, monkeypatch):
+    from eggtimer_decoder import sdr
+
+    d = sdr.DeviceInfo("rtl=0", "rtl:0", "rtl=0", (0.0, 1766e6), (250e3, 1.92e6))
+    monkeypatch.setattr(sdr, "discover", lambda *a, **k: [d])
+    assert main(["devices"]) == 0
+    assert "rtl=0\trtl:0\t0-1766 MHz" in capsys.readouterr().out
 
 
 def test_channels_table(capsys):

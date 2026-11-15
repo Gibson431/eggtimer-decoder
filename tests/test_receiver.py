@@ -435,4 +435,4 @@ def test_default_factory_sim_and_gain_ppm_passed(monkeypatch):
 
     monkeypatch.setattr(sdr, "open_source", fake_open)
     default_source_factory(Settings(device="", gain=12.5, ppm=3.0))
-    assert seen == dict(device=None, center=921e6, rate=960_000.0, ppm=3.0, gain_db=12.5)
+    assert seen == dict(device=None, center=921e6, rate=960_000.0, ppm=3.0, gain_db=12.5, rate_multiple_of=192_000.0)
