@@ -63,8 +63,14 @@ def test_json_log_golden(tmp_path):
         '{"type":"frame","timestamp":2.0,"payload":"0161620d0a"}',
         json.dumps({"type": "nmea", "timestamp": 3.0, "sentence": GGA}, **compact),
         json.dumps(
-            {"type": "position", "timestamp": 3.0, "lat": POS.lat, "lon": POS.lon,
-             "alt_m": POS.alt_m, "satellites": POS.satellites},
+            {
+                "type": "position",
+                "timestamp": 3.0,
+                "lat": POS.lat,
+                "lon": POS.lon,
+                "alt_m": POS.alt_m,
+                "satellites": POS.satellites,
+            },
             **compact,
         ),
         json.dumps({"type": "nmea", "timestamp": 4.0, "sentence": OTHER}, **compact),
@@ -81,7 +87,13 @@ def test_last_position_store(tmp_path):
     assert store.position == POS and store.timestamp == 3.0
     newer = Position(1.5, -2.5, 10.0, 7)
     store(PositionEvent(newer, 9.0))
-    assert json.loads(p.read_text()) == {"lat": 1.5, "lon": -2.5, "alt_m": 10.0, "satellites": 7, "timestamp": 9.0}
+    assert json.loads(p.read_text()) == {
+        "lat": 1.5,
+        "lon": -2.5,
+        "alt_m": 10.0,
+        "satellites": 7,
+        "timestamp": 9.0,
+    }
     assert [x.name for x in p.parent.iterdir()] == ["pos.json"]
     again = LastPositionStore(p)
     assert again.position == newer and again.timestamp == 9.0

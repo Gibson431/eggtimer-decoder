@@ -40,7 +40,10 @@ class Settings:
     def __post_init__(self) -> None:
         if not isinstance(self.device, str):
             raise SettingsError(f"device must be a string, got {self.device!r}")
-        if not _is_num(self.center_freq_hz) or not MIN_FREQ_HZ <= self.center_freq_hz <= MAX_FREQ_HZ:
+        if (
+            not _is_num(self.center_freq_hz)
+            or not MIN_FREQ_HZ <= self.center_freq_hz <= MAX_FREQ_HZ
+        ):
             raise SettingsError(
                 f"center_freq_hz must be a number in {MIN_FREQ_HZ:g}..{MAX_FREQ_HZ:g} Hz, got {self.center_freq_hz!r}"
             )
@@ -48,17 +51,27 @@ class Settings:
             get_channel(self.channel)
         except ValueError as e:
             raise SettingsError(str(e)) from None
-        if self.gain is not None and (not _is_num(self.gain) or not 0 <= self.gain <= 100):
-            raise SettingsError(f"gain must be 0..100 dB or unset (auto), got {self.gain!r}")
+        if self.gain is not None and (
+            not _is_num(self.gain) or not 0 <= self.gain <= 100
+        ):
+            raise SettingsError(
+                f"gain must be 0..100 dB or unset (auto), got {self.gain!r}"
+            )
         if not _is_num(self.ppm) or abs(self.ppm) > MAX_PPM:
-            raise SettingsError(f"ppm must be a number within ±{MAX_PPM:g}, got {self.ppm!r}")
+            raise SettingsError(
+                f"ppm must be a number within ±{MAX_PPM:g}, got {self.ppm!r}"
+            )
         for name in ("log_file", "position_file"):
             v = getattr(self, name)
             if v is not None and (not isinstance(v, str) or not v):
-                raise SettingsError(f"{name} must be a non-empty path string or unset, got {v!r}")
+                raise SettingsError(
+                    f"{name} must be a non-empty path string or unset, got {v!r}"
+                )
         for name in ("verbose", "quiet"):
             if not isinstance(getattr(self, name), bool):
-                raise SettingsError(f"{name} must be true or false, got {getattr(self, name)!r}")
+                raise SettingsError(
+                    f"{name} must be true or false, got {getattr(self, name)!r}"
+                )
         if self.verbose and self.quiet:
             raise SettingsError("verbose and quiet are mutually exclusive")
 
@@ -85,7 +98,9 @@ def _parse_env_value(name: str, raw: str) -> Any:
         if name in ("log_file", "position_file"):
             return s or None
     except ValueError:
-        raise SettingsError(f"{ENV_PREFIX}{name.upper()}: cannot parse {raw!r}") from None
+        raise SettingsError(
+            f"{ENV_PREFIX}{name.upper()}: cannot parse {raw!r}"
+        ) from None
     return raw
 
 
@@ -112,7 +127,11 @@ def resolve_settings(
     Unknown keys in any layer are rejected.
     """
     merged = asdict(defaults or Settings())
-    layers = [file_values or {}, settings_from_env(env or {}), {k: v for k, v in (cli or {}).items() if v is not None}]
+    layers = [
+        file_values or {},
+        settings_from_env(env or {}),
+        {k: v for k, v in (cli or {}).items() if v is not None},
+    ]
     for layer in layers:
         unknown = set(layer) - _FIELDS
         if unknown:

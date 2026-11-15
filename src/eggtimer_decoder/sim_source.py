@@ -99,8 +99,15 @@ class SimSource:
                 ph = self._phase + step * np.arange(num_samples)
                 sig = sig * np.exp(1j * ph).astype(np.complex64)
                 self._phase = float((self._phase + step * num_samples) % (2 * np.pi))
-            sigma = 10 ** (-self.snr_db / 20) / np.sqrt(2) if np.isfinite(self.snr_db) else 0.0
-            noise = sigma * (self._rng.standard_normal(num_samples) + 1j * self._rng.standard_normal(num_samples))
+            sigma = (
+                10 ** (-self.snr_db / 20) / np.sqrt(2)
+                if np.isfinite(self.snr_db)
+                else 0.0
+            )
+            noise = sigma * (
+                self._rng.standard_normal(num_samples)
+                + 1j * self._rng.standard_normal(num_samples)
+            )
             out = (sig + noise).astype(np.complex64)
             self._emitted += num_samples
             emitted = self._emitted
@@ -119,15 +126,21 @@ class SimSource:
     @staticmethod
     def _check_freq(f: float) -> float:
         if not np.isfinite(f) or f <= 0:
-            raise ValueError(f"centre frequency must be a positive finite number, got {f!r}")
+            raise ValueError(
+                f"centre frequency must be a positive finite number, got {f!r}"
+            )
         return float(f)
 
     def _set_channel(self, channel: int, tx_freq: float | None) -> None:
         ch = get_channel(channel, self._table)
-        cycle = make_capture(self._payloads, ch.radio_config(), snr_db=float("inf"), seed=self._seed)
+        cycle = make_capture(
+            self._payloads, ch.radio_config(), snr_db=float("inf"), seed=self._seed
+        )
         self._chan = ch
         self._cycle = cycle
-        self._tx_freq = float(tx_freq) if tx_freq is not None else self._center + ch.offset_hz
+        self._tx_freq = (
+            float(tx_freq) if tx_freq is not None else self._center + ch.offset_hz
+        )
         self._pos = 0
         self._emitted = 0
         self._t0 = None

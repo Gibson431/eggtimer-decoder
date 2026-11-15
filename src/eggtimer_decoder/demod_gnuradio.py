@@ -36,16 +36,25 @@ def demod_bits(iq: np.ndarray, cfg: RadioConfig) -> np.ndarray:
     from gnuradio.filter import firdes
 
     x = np.asarray(iq, dtype=np.complex128)
-    x = _fir(x, firdes.low_pass(1.0, cfg.samp_rate, cfg.deviation + 2 * cfg.baud, cfg.baud * 2))
+    x = _fir(
+        x,
+        firdes.low_pass(1.0, cfg.samp_rate, cfg.deviation + 2 * cfg.baud, cfg.baud * 2),
+    )
     d = np.zeros(len(x))
-    d[1:] = np.angle(x[1:] * np.conj(x[:-1])) * (cfg.samp_rate / (2 * math.pi * cfg.deviation))
-    d = _fir(d, firdes.low_pass(1.0, cfg.samp_rate, cfg.baud * 0.75, cfg.baud * 0.5)).astype(np.float32)
+    d[1:] = np.angle(x[1:] * np.conj(x[:-1])) * (
+        cfg.samp_rate / (2 * math.pi * cfg.deviation)
+    )
+    d = _fir(
+        d, firdes.low_pass(1.0, cfg.samp_rate, cfg.baud * 0.75, cfg.baud * 0.5)
+    ).astype(np.float32)
 
     class ClockRecovery(gr.top_block):
         def __init__(self) -> None:
             super().__init__("eggfinder-fsk")
             src = blocks.vector_source_f(d.tolist(), False)
-            cr = digital.clock_recovery_mm_ff(cfg.sps, 0.25 * 0.175**2, 0.5, 0.175, 0.005)
+            cr = digital.clock_recovery_mm_ff(
+                cfg.sps, 0.25 * 0.175**2, 0.5, 0.175, 0.005
+            )
             self.sink = blocks.vector_sink_b()
             self.connect(src, cr, digital.binary_slicer_fb(), self.sink)
 

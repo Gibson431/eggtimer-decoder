@@ -37,9 +37,16 @@ def test_nmea_reassembly_across_frames():
 
 
 def test_parse_gga():
-    pos = parse_gga("$GNGGA,014049.000,3520.8200,N,11748.4800,W,1,08,1.1,1500.5,M,-33.0,M,,*00")
+    pos = parse_gga(
+        "$GNGGA,014049.000,3520.8200,N,11748.4800,W,1,08,1.1,1500.5,M,-33.0,M,,*00"
+    )
     assert pos is not None
-    assert (round(pos.lat, 4), round(pos.lon, 4), pos.alt_m, pos.satellites) == (35.347, -117.808, 1500.5, 8)
+    assert (round(pos.lat, 4), round(pos.lon, 4), pos.alt_m, pos.satellites) == (
+        35.347,
+        -117.808,
+        1500.5,
+        8,
+    )
     assert parse_gga("$GNGGA,014048.084,,,,,0,0,,,M,,M,,*58") is None
 
 
@@ -55,5 +62,7 @@ def test_gnuradio_end_to_end_nmea():
     from eggtimer_decoder.demod_gnuradio import decode
 
     asm = NmeaAssembler()
-    lines = [l for f in decode(make_capture(nmea_payloads(), CFG), CFG) for l in asm.feed(f)]
+    lines = [
+        l for f in decode(make_capture(nmea_payloads(), CFG), CFG) for l in asm.feed(f)
+    ]
     assert len(lines) == 3

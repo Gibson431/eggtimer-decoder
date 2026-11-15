@@ -67,9 +67,13 @@ class StreamDemod:
         """Retarget to ``channel`` (ValueError if invalid, nothing changes) and reset state."""
         ch = get_channel(channel, self._table)
         if ch.samp_rate > self.sample_rate:
-            raise ValueError(f"channel {channel} needs {ch.samp_rate} S/s, input is {self.sample_rate}")
+            raise ValueError(
+                f"channel {channel} needs {ch.samp_rate} S/s, input is {self.sample_rate}"
+            )
         if abs(ch.offset_hz) + ch.deviation >= self.sample_rate / 2:
-            raise ValueError(f"channel {channel} offset {ch.offset_hz} Hz is outside the input bandwidth")
+            raise ValueError(
+                f"channel {channel} offset {ch.offset_hz} Hz is outside the input bandwidth"
+            )
         self._ch = ch
         self._configure()
 
@@ -87,13 +91,17 @@ class StreamDemod:
         self._fs2 = fs / self._decim
         self._w = -2 * np.pi * ch.offset_hz / fs
         self._phase = 0.0
-        self._chan_taps = _lowpass(ch.deviation + 2 * ch.baud, 2 * ch.baud + fs / 20, fs)
+        self._chan_taps = _lowpass(
+            ch.deviation + 2 * ch.baud, 2 * ch.baud + fs / 20, fs
+        )
         self._chan_tail = np.zeros(len(self._chan_taps) - 1, dtype=np.complex128)
         self._skip = 0
         self._last_iq = 0j
         self._have_last = False
         self._disc_gain = self._fs2 / (2 * np.pi * ch.deviation)
-        self._sym_taps = _lowpass(ch.baud * 0.75, ch.baud * 0.5 + self._fs2 / 40, self._fs2)
+        self._sym_taps = _lowpass(
+            ch.baud * 0.75, ch.baud * 0.5 + self._fs2 / 40, self._fs2
+        )
         self._sym_tail = np.zeros(len(self._sym_taps) - 1)
         self._sps = self._fs2 / ch.baud
         self._omega = self._sps
@@ -139,12 +147,16 @@ class StreamDemod:
             f = pos - i
             cur = b[i] * (1 - f) + b[i + 1] * f
             out.append(cur > 0)
-            err = (1.0 if last_s > 0 else -1.0) * cur - (1.0 if cur > 0 else -1.0) * last_s
+            err = (1.0 if last_s > 0 else -1.0) * cur - (
+                1.0 if cur > 0 else -1.0
+            ) * last_s
             err = max(-1.0, min(1.0, err))
             omega = min(hi, max(lo, omega + gain_omega * err))
             pos += omega + gain_mu * err
             last_s = cur
-        shift = min(int(pos), len(b))  # pos may point beyond this chunk; keep the offset
+        shift = min(
+            int(pos), len(b)
+        )  # pos may point beyond this chunk; keep the offset
         self._cr_tail = b[shift:]
         self._pos, self._omega, self._last_s = pos - shift, omega, last_s
         return np.array(out, dtype=np.uint8)

@@ -53,7 +53,9 @@ class SignalMeasurement:
     present: bool
 
     def to_event(self, timestamp: float = 0.0) -> SignalEvent:
-        return SignalEvent(self.strength_db, self.carrier_offset_hz, self.present, timestamp)
+        return SignalEvent(
+            self.strength_db, self.carrier_offset_hz, self.present, timestamp
+        )
 
 
 class SignalMetrics:
@@ -121,7 +123,9 @@ class SignalMetrics:
         offset = 0.0
         if self._present:
             # median of an exponential PSD is ln2 * mean, so scale to the mean
-            excess = np.where(smooth > 4 * floor, np.maximum(psd - floor / np.log(2), 0), 0)
+            excess = np.where(
+                smooth > 4 * floor, np.maximum(psd - floor / np.log(2), 0), 0
+            )
             total = excess.sum()
             if total > 0:
                 centre = float(np.sum(freqs * excess) / total)

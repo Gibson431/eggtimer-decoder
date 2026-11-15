@@ -9,7 +9,9 @@ from .config import RadioConfig
 RTL_RATE = 960_000.0  # 5x the 192 kHz working rate; valid RTL2832 rate
 
 
-def capture(freq_hz: float, seconds: float, cfg: RadioConfig, gain_db: float = 30.0) -> np.ndarray:
+def capture(
+    freq_hz: float, seconds: float, cfg: RadioConfig, gain_db: float = 30.0
+) -> np.ndarray:
     import osmosdr
     from gnuradio import blocks, gr
     from gnuradio.filter import firdes, fir_filter_ccf

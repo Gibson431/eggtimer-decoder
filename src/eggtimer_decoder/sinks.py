@@ -46,7 +46,9 @@ class ConsoleSink:
             pos = parse_gga(event.sentence)
             line = f"{event.sentence} => {pos}" if pos else event.sentence
         elif isinstance(event, StatusEvent):
-            line = f"[{event.state.value}]" + (f" {event.message}" if event.message else "")
+            line = f"[{event.state.value}]" + (
+                f" {event.message}" if event.message else ""
+            )
         else:
             return
         print(line, file=self._stream or sys.stdout, flush=True)
@@ -55,13 +57,30 @@ class ConsoleSink:
 def event_to_dict(event: Event) -> dict | None:
     """JSON-ready dict with a ``type`` field, or None for unknown events."""
     if isinstance(event, FrameEvent):
-        return {"type": "frame", "timestamp": event.timestamp, "payload": event.payload.hex()}
+        return {
+            "type": "frame",
+            "timestamp": event.timestamp,
+            "payload": event.payload.hex(),
+        }
     if isinstance(event, NmeaEvent):
-        return {"type": "nmea", "timestamp": event.timestamp, "sentence": event.sentence}
+        return {
+            "type": "nmea",
+            "timestamp": event.timestamp,
+            "sentence": event.sentence,
+        }
     if isinstance(event, PositionEvent):
-        return {"type": "position", "timestamp": event.timestamp, **dataclasses.asdict(event.position)}
+        return {
+            "type": "position",
+            "timestamp": event.timestamp,
+            **dataclasses.asdict(event.position),
+        }
     if isinstance(event, StatusEvent):
-        return {"type": "status", "timestamp": event.timestamp, "state": event.state.value, "message": event.message}
+        return {
+            "type": "status",
+            "timestamp": event.timestamp,
+            "state": event.state.value,
+            "message": event.message,
+        }
     if isinstance(event, SignalEvent):
         return {
             "type": "signal",
@@ -112,7 +131,10 @@ class LastPositionStore:
             try:
                 d = json.loads(self._path.read_text(encoding="utf-8"))
                 self._position = Position(
-                    float(d["lat"]), float(d["lon"]), float(d["alt_m"]), int(d["satellites"])
+                    float(d["lat"]),
+                    float(d["lon"]),
+                    float(d["alt_m"]),
+                    int(d["satellites"]),
                 )
                 self._timestamp = float(d["timestamp"])
             except (OSError, ValueError, KeyError, TypeError):
@@ -138,7 +160,9 @@ class LastPositionStore:
 
     def _write(self, event: PositionEvent) -> None:
         assert self._path is not None
-        data = json.dumps({**dataclasses.asdict(event.position), "timestamp": event.timestamp})
+        data = json.dumps(
+            {**dataclasses.asdict(event.position), "timestamp": event.timestamp}
+        )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=self._path.parent, prefix=self._path.name + ".")
         try:

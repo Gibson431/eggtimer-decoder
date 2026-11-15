@@ -75,7 +75,10 @@ class FrameDetector:
             windows = np.lib.stride_tricks.sliding_window_view(buf[self._scan :], nsync)
             hits = [
                 (int(i) + self._scan, invert)
-                for invert, pattern in ((False, self._SYNC_BITS), (True, self._SYNC_BITS ^ 1))
+                for invert, pattern in (
+                    (False, self._SYNC_BITS),
+                    (True, self._SYNC_BITS ^ 1),
+                )
                 for i in np.flatnonzero((windows == pattern).all(axis=1))
             ]
             for start, invert in sorted(hits):
@@ -167,11 +170,19 @@ class Position:
 def parse_gga(line: str) -> Position | None:
     """Position from a GGA sentence, or None if there is no fix."""
     f = line[1:].split("*")[0].split(",")
-    if not f[0].endswith("GGA") or len(f) < 10 or f[6] in ("", "0") or not f[2] or not f[4]:
+    if (
+        not f[0].endswith("GGA")
+        or len(f) < 10
+        or f[6] in ("", "0")
+        or not f[2]
+        or not f[4]
+    ):
         return None
 
     def deg(v: str, hemi: str, dlen: int) -> float:
         d = float(v[:dlen]) + float(v[dlen:]) / 60
         return -d if hemi in ("S", "W") else d
 
-    return Position(deg(f[2], f[3], 2), deg(f[4], f[5], 3), float(f[9] or 0), int(f[7] or 0))
+    return Position(
+        deg(f[2], f[3], 2), deg(f[4], f[5], 3), float(f[9] or 0), int(f[7] or 0)
+    )

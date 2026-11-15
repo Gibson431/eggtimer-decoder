@@ -25,7 +25,9 @@ pytestmark = [
 
 def test_discovery_finds_an_rtl_sdr():
     devices = sdr.discover()
-    assert devices, "no SDR found (is the RTL-SDR attached and not in use by another program?)"
+    assert (
+        devices
+    ), "no SDR found (is the RTL-SDR attached and not in use by another program?)"
     d = devices[0]
     lo, hi = d.freq_range
     assert lo <= 921e6 <= hi
@@ -39,12 +41,18 @@ def test_receiver_runs_on_channel_0_at_921mhz():
     rx.start()
     try:
         time.sleep(6)
-        assert rx.state is ReceiverState.RUNNING, [e for e in events if isinstance(e, StatusEvent)]
+        assert rx.state is ReceiverState.RUNNING, [
+            e for e in events if isinstance(e, StatusEvent)
+        ]
     finally:
         rx.stop()
     states = [e.state for e in events if isinstance(e, StatusEvent)]
-    assert ReceiverState.ERROR not in states, [e.message for e in events if isinstance(e, StatusEvent)]
+    assert ReceiverState.ERROR not in states, [
+        e.message for e in events if isinstance(e, StatusEvent)
+    ]
     signals = [e for e in events if isinstance(e, SignalEvent)]
     assert signals, "no signal events reported"
-    print(f"{len(signals)} signal events; present={any(e.present for e in signals)}; "
-          f"max strength={max(e.strength_db for e in signals):.1f} dBFS")
+    print(
+        f"{len(signals)} signal events; present={any(e.present for e in signals)}; "
+        f"max strength={max(e.strength_db for e in signals):.1f} dBFS"
+    )

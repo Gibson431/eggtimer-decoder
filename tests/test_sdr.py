@@ -141,11 +141,23 @@ def test_osmo_range_parsing_matches_rtl_sdr_blog_v4():
     freq = FakeMetaRange("(0, 1.766e+09)", 0.0, 1766e6, 0.0)
     rates = FakeMetaRange(
         "(250000)\n(1e+06)\n(1.024e+06)\n(1.8e+06)\n(1.92e+06)\n(2e+06)\n(2.048e+06)\n(2.4e+06)\n(2.56e+06)\n",
-        250e3, 2.56e6, 24e3,
+        250e3,
+        2.56e6,
+        24e3,
     )
     assert sdr._range_bounds(freq) == (0.0, 1766e6)
     got = sdr._rates(rates)
-    assert got == (250e3, 1e6, 1.024e6, 1.8e6, 1.92e6, 2e6, 2.048e6, 2.4e6, 2.56e6)  # not 250k + n*24k
+    assert got == (
+        250e3,
+        1e6,
+        1.024e6,
+        1.8e6,
+        1.92e6,
+        2e6,
+        2.048e6,
+        2.4e6,
+        2.56e6,
+    )  # not 250k + n*24k
     # no parsable text -> falls back to start/stop/step
     assert sdr._rates(FakeMetaRange("", 1.0, 3.0, 1.0)) == (1.0, 2.0, 3.0)
 
@@ -174,18 +186,32 @@ def test_osmo_enumerate_with_stand_in_library(monkeypatch):
     monkeypatch.setitem(sys.modules, "osmosdr", mod)
     devs = discover()
     assert [d.id for d in devs] == ["rtl=0"]
-    assert devs[0].freq_range == (0.0, 1766e6) and devs[0].sample_rates == (250e3, 1.92e6)
-    monkeypatch.setitem(sys.modules, "osmosdr", types.SimpleNamespace(source=lambda args: Src("rtl=9")))
+    assert devs[0].freq_range == (0.0, 1766e6) and devs[0].sample_rates == (
+        250e3,
+        1.92e6,
+    )
+    monkeypatch.setitem(
+        sys.modules, "osmosdr", types.SimpleNamespace(source=lambda args: Src("rtl=9"))
+    )
     assert discover() == []
 
 
 def test_pick_rate_integer_multiple_of_channel_rate():
     # RTL-SDR Blog V4 rates: 960 kHz is not offered, 1 MHz is nearest but not a multiple of 192 kHz
-    v4 = DeviceInfo("rtl=0", "rtl:0", "rtl=0", (0, 1766e6),
-                    (250e3, 1e6, 1.024e6, 1.8e6, 1.92e6, 2e6, 2.048e6, 2.4e6, 2.56e6))
+    v4 = DeviceInfo(
+        "rtl=0",
+        "rtl:0",
+        "rtl=0",
+        (0, 1766e6),
+        (250e3, 1e6, 1.024e6, 1.8e6, 1.92e6, 2e6, 2.048e6, 2.4e6, 2.56e6),
+    )
     assert pick_sample_rate(v4, 960e3) == 1e6
     assert pick_sample_rate(v4, 960e3, multiple_of=192e3) == 1.92e6
-    assert pick_sample_rate(info(), 1e6, multiple_of=192e3) == 960e3  # fake rates include 5x192k
-    assert pick_sample_rate(info(), 1e6, multiple_of=100e3) == 1.024e6  # no multiple: plain nearest
+    assert (
+        pick_sample_rate(info(), 1e6, multiple_of=192e3) == 960e3
+    )  # fake rates include 5x192k
+    assert (
+        pick_sample_rate(info(), 1e6, multiple_of=100e3) == 1.024e6
+    )  # no multiple: plain nearest
     s = open_source(None, 921e6, 960e3, backend=FakeBackend(1), rate_multiple_of=192e3)
     assert s.sample_rate == 960e3

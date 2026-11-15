@@ -69,7 +69,10 @@ def discover(backend: Backend | None = None) -> list[DeviceInfo]:
 
 
 def pick_sample_rate(
-    info: DeviceInfo, wanted: float, tolerance: float = 0.0, multiple_of: float | None = None
+    info: DeviceInfo,
+    wanted: float,
+    tolerance: float = 0.0,
+    multiple_of: float | None = None,
 ) -> float:
     """Return the supported rate nearest ``wanted``.
 
@@ -84,7 +87,11 @@ def pick_sample_rate(
         raise ValueError(f"{info.id}: no sample rates reported")
     rates = info.sample_rates
     if multiple_of:
-        mult = [r for r in rates if abs(r / multiple_of - round(r / multiple_of)) < 1e-6 and r >= multiple_of]
+        mult = [
+            r
+            for r in rates
+            if abs(r / multiple_of - round(r / multiple_of)) < 1e-6 and r >= multiple_of
+        ]
         rates = tuple(mult) or rates
     best = min(rates, key=lambda r: abs(r - wanted))
     if tolerance and abs(best - wanted) > tolerance * wanted:
@@ -117,8 +124,13 @@ def _check_freq(info: DeviceInfo, f: float) -> None:
 class SdrSource:
     """``SampleSource`` over an opened device handle."""
 
-    def __init__(self, info: DeviceInfo, handle: DeviceHandle, sample_rate: float,
-                 center_freq: float):
+    def __init__(
+        self,
+        info: DeviceInfo,
+        handle: DeviceHandle,
+        sample_rate: float,
+        center_freq: float,
+    ):
         self.info = info
         self._h = handle
         self._rate = sample_rate
@@ -289,7 +301,9 @@ class _OsmoHandle:
 
         self._src = osmosdr.source(args=f"numchan=1 {info.args}")
         self._tb = gr.top_block("sdr-source")
-        self._sink = Sink()  # keep the Python block alive: the flowgraph only holds the C++ side
+        self._sink = (
+            Sink()
+        )  # keep the Python block alive: the flowgraph only holds the C++ side
         self._tb.connect(self._src, self._sink)
         self._tb.start()
 
