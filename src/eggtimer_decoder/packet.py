@@ -44,31 +44,79 @@ def _bits_to_bytes(bits: np.ndarray) -> bytes:
     return np.packbits(bits[:n].astype(np.uint8)).tobytes()
 
 
+class FrameDetector:
+    """Streaming frame detector for a hard-decision bit stream fed in pieces.
+
+    ``feed(bits)`` returns the payloads of CRC-valid frames completed by those
+    bits, in order of frame start. Frames may span any number of pieces and
+    either bit polarity is accepted. Results do not depend on how the stream
+    is split. State is bounded: at most one maximum-size frame plus the latest
+    piece is retained.
+    """
+
+    _SYNC_BITS = bytes_to_bits(SYNC)
+    _MAX_FRAME_BITS = len(_SYNC_BITS) + 8 * (MAX_PAYLOAD + 3)
+
+    def __init__(self) -> None:
+        self._buf = np.zeros(0, dtype=np.uint8)
+        self._scan = 0  # sync candidates starting before this are resolved
+
+    def reset(self) -> None:
+        self._buf = np.zeros(0, dtype=np.uint8)
+        self._scan = 0
+
+    def feed(self, bits: np.ndarray) -> list[bytes]:
+        new = np.asarray(bits, dtype=np.uint8).ravel() & 1
+        self._buf = np.concatenate([self._buf, new])
+        buf, nsync = self._buf, len(self._SYNC_BITS)
+        frames: list[bytes] = []
+        blocked = False
+        if len(buf) - self._scan >= nsync:
+            windows = np.lib.stride_tricks.sliding_window_view(buf[self._scan :], nsync)
+            hits = [
+                (int(i) + self._scan, invert)
+                for invert, pattern in ((False, self._SYNC_BITS), (True, self._SYNC_BITS ^ 1))
+                for i in np.flatnonzero((windows == pattern).all(axis=1))
+            ]
+            for start, invert in sorted(hits):
+                b = buf ^ 1 if invert else buf
+                status, payload = self._decode(b, start + nsync)
+                if status is None:  # not enough bits yet; resume here later
+                    self._scan = start
+                    blocked = True
+                    break
+                if payload is not None:
+                    frames.append(payload)
+        if not blocked:
+            self._scan = max(self._scan, len(buf) - nsync + 1)
+        self._buf = buf[self._scan :].copy()
+        self._scan = 0
+        return frames
+
+    @staticmethod
+    def _decode(b: np.ndarray, pos: int) -> tuple[bool | None, bytes | None]:
+        """(None, None) if more bits are needed, else (True, payload or None)."""
+        hdr = _bits_to_bytes(b[pos : pos + 8])
+        if not hdr:
+            return None, None
+        if not 0 < hdr[0] <= MAX_PAYLOAD:
+            return True, None
+        n = hdr[0]
+        raw = _bits_to_bytes(b[pos : pos + 8 * (n + 3)])
+        if len(raw) < n + 3:
+            return None, None
+        if crc16(raw[: n + 1]) != int.from_bytes(raw[n + 1 :], "big"):
+            return True, None
+        return True, raw[1 : n + 1]
+
+
 def find_frames(bits: np.ndarray) -> list[bytes]:
     """Scan a hard-decision bit stream; return payloads of CRC-valid frames.
 
     Tries both polarities, since the demod sign depends on tuning/convention.
+    Batch wrapper over ``FrameDetector``.
     """
-    found: list[tuple[int, bytes]] = []
-    sync_bits = bytes_to_bits(SYNC)
-    for invert in (False, True):
-        b = np.asarray(bits, dtype=np.uint8)
-        if invert:
-            b = b ^ 1
-        if len(b) < len(sync_bits):
-            continue
-        windows = np.lib.stride_tricks.sliding_window_view(b, len(sync_bits))
-        for start in np.flatnonzero((windows == sync_bits).all(axis=1)):
-            pos = int(start) + len(sync_bits)
-            hdr = _bits_to_bytes(b[pos : pos + 8])
-            if not hdr or not 0 < hdr[0] <= MAX_PAYLOAD:
-                continue
-            n = hdr[0]
-            raw = _bits_to_bytes(b[pos : pos + 8 * (n + 3)])
-            if len(raw) < n + 3 or crc16(raw[: n + 1]) != int.from_bytes(raw[n + 1 : n + 3], "big"):
-                continue
-            found.append((int(start), raw[1 : n + 1]))
-    return [p for _, p in sorted(found, key=lambda x: x[0])]
+    return FrameDetector().feed(bits)
 
 
 def nmea_checksum_ok(line: str) -> bool:
