@@ -1,5 +1,6 @@
 [tools]
 pixi = "0.84"
+pre-commit = "latest"
 
 [tasks.decode]
 description = "Run the CLI (pass args after --, e.g. -- channels)"
