@@ -83,13 +83,12 @@ mise run decode -- settings reset
 
 Run `mise tasks` to list them.
 
-| Task | Does |
-|---|---|
-| `mise run decode -- [args]` | the CLI |
-| `mise run gui` | open the GUI |
-| `mise run sim` | simulated source, channel 0, 10 s |
-| `mise run test` | test suite (hermetic, no SDR; GUI widget tests run offscreen) |
-| `mise run hardware-test` | opt-in real RTL-SDR test; see [`docs/HARDWARE_TEST.md`](docs/HARDWARE_TEST.md) |
+| Task                        | Does                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------ |
+| `mise run decode -- [args]` | the CLI                                                                        |
+| `mise run gui`              | open the GUI                                                                   |
+| `mise run sim`              | simulated source, channel 0, 10 s                                              |
+| `mise run test`             | test suite (hermetic, no SDR; GUI widget tests run offscreen)                  |
 
 ## 🔧 Extending
 

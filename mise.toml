@@ -17,7 +17,3 @@ run = "pixi run sim"
 [tasks.test]
 description = "Run the test suite (no SDR needed)"
 run = "pixi run test"
-
-[tasks.hardware-test]
-description = "Opt-in test against a real RTL-SDR"
-run = "pixi run hardware-test"

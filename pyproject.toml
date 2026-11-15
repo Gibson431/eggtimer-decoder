@@ -42,9 +42,3 @@ decode = "eggtimer-decoder"
 gui = "eggtimer-decoder"
 sim = "eggtimer-decoder run --device sim --channel 0 --duration 10"
 test = "pytest -q"
-hardware-test = { cmd = "pytest -m hardware -s -rs tests/test_hardware.py", env = { EGGTIMER_HARDWARE = "1" } }
-
-[tool.pytest.ini_options]
-markers = [
-    "hardware: needs a real RTL-SDR; skipped unless EGGTIMER_HARDWARE=1",
-]
