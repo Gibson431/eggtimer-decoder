@@ -61,6 +61,7 @@ __all__ = [
     "Receiver",
     "ReceiverState",
     "SampleSource",
+    "SignalEvent",
     "StatusEvent",
     "Subscriber",
     "Unsubscribe",
@@ -108,7 +109,19 @@ class StatusEvent:
     timestamp: float = 0.0
 
 
-Event = FrameEvent | NmeaEvent | PositionEvent | StatusEvent
+@dataclass(frozen=True)
+class SignalEvent:
+    """Periodic signal quality. ``strength_db`` is power in dB relative to full
+    scale, ``carrier_offset_hz`` is measured relative to the channel centre and
+    ``present`` says whether a signal is detected above the noise floor."""
+
+    strength_db: float
+    carrier_offset_hz: float
+    present: bool
+    timestamp: float = 0.0
+
+
+Event = FrameEvent | NmeaEvent | PositionEvent | StatusEvent | SignalEvent
 Subscriber = Callable[[Event], None]
 Unsubscribe = Callable[[], None]
 
