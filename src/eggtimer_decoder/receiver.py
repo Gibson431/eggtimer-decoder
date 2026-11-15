@@ -72,9 +72,14 @@ def default_source_factory(settings: Settings) -> SampleSource:
     from . import sdr
 
     kwargs = {} if settings.gain is None else {"gain_db": settings.gain}
-    rate = 5 * CHANNELS[settings.channel].samp_rate  # integer multiple of the channel rate (D24)
-    return sdr.open_source(
-        settings.device or None, settings.center_freq_hz, sample_rate=rate, ppm=settings.ppm, **kwargs
+    chan_rate = CHANNELS[settings.channel].samp_rate
+    return sdr.open_source(  # source rate must be an integer multiple of the channel rate (D24)
+        settings.device or None,
+        settings.center_freq_hz,
+        sample_rate=5 * chan_rate,
+        ppm=settings.ppm,
+        rate_multiple_of=chan_rate,
+        **kwargs,
     )
 
 

@@ -39,3 +39,8 @@ eggtimer-decoder = { path = ".", editable = true }
 [tool.pixi.tasks]
 decode = "eggtimer-decoder"
 test = "pytest -q"
+
+[tool.pytest.ini_options]
+markers = [
+    "hardware: needs a real RTL-SDR; skipped unless EGGTIMER_HARDWARE=1",
+]
