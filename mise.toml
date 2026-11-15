@@ -1,0 +1,10 @@
+[tools]
+pixi = "0.84"
+
+[tasks.decode]
+description = "Run the decoder via pixi"
+run = "pixi run decode"
+
+[tasks.test]
+description = "Run the test suite via pixi"
+run = "pixi run test"

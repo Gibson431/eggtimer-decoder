@@ -1,0 +1,41 @@
+[project]
+name = "eggtimer-decoder"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Gibson431", email = "timmaxgibson@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.5.4",
+]
+
+[project.scripts]
+eggtimer-decoder = "eggtimer_decoder:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.dependencies]
+gnuradio = "*"
+numpy = "*"
+gnuradio-osmosdr = "*"
+rtl-sdr = "*"
+pytest = "*"
+
+[tool.pixi.pypi-dependencies]
+eggtimer-decoder = { path = ".", editable = true }
+
+[tool.pixi.tasks]
+decode = "eggtimer-decoder"
+test = "pytest -q"
