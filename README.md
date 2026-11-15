@@ -7,26 +7,28 @@ a frequency offset from the centre (see `docs/CHANNELS.md`).
 
 ## Install
 
-Needs [pixi](https://pixi.sh) (or [mise](https://mise.jdx.dev), which installs it). GNU Radio,
-gr-osmosdr and rtl-sdr come from conda-forge. Linux x86-64 only.
+Needs [mise](https://mise.jdx.dev). GNU Radio, gr-osmosdr and rtl-sdr are installed for you.
+Linux x86-64 only.
 
     git clone <repo> && cd eggtimer-decoder
-    pixi install
+    mise trust
+    mise install
 
-pixi may warn that post-link scripts were skipped; that is harmless.
+The first `mise run` below sets up the rest (a one-off download, so it takes a while).
+You may see a warning that post-link scripts were skipped; that is harmless.
 
 ## Use
 
-No SDR is needed to try it:
+No SDR is needed to try it. Arguments for the decoder go after `--`:
 
-    pixi run eggtimer-decoder run --device sim --channel 3 --duration 5   # simulated source
-    pixi run eggtimer-decoder channels                                    # channel table
-    pixi run eggtimer-decoder devices                                     # attached SDRs ("none found" if empty)
-    pixi run eggtimer-decoder                                             # no arguments: open the GUI (needs a display)
+    mise run decode -- run --device sim --channel 3 --duration 5   # simulated source
+    mise run decode -- channels                                    # channel table
+    mise run decode -- devices                                     # attached SDRs ("none found" if empty)
+    mise run gui                                                   # open the GUI (needs a display)
 
 Real SDR (receive only):
 
-    pixi run eggtimer-decoder run --device rtl=0 --center-freq 921M --channel 0 --gain 30
+    mise run decode -- run --device rtl=0 --center-freq 921M --channel 0 --gain 30
 
 `run` is the default when only options are given. Useful options: `--ppm`, `--log-file PATH`
 (JSON lines), `--position-file PATH` (last position), `-v`, `-q`; Ctrl-C stops. Frequencies accept
@@ -38,21 +40,21 @@ Settings are saved between runs (the GUI uses the same file). Precedence: comman
 `EGGTIMER_*` environment variables (e.g. `EGGTIMER_CHANNEL=3`) > saved file > defaults.
 The file path can be moved with `EGGTIMER_CONFIG`.
 
-    pixi run eggtimer-decoder settings show
-    pixi run eggtimer-decoder settings set channel=3 center_freq_hz=921M gain=auto
-    pixi run eggtimer-decoder settings reset
+    mise run decode -- settings show
+    mise run decode -- settings set channel=3 center_freq_hz=921M gain=auto
+    mise run decode -- settings reset
 
 ### Tasks
 
-Shortcuts defined in `pyproject.toml` (also available as `mise run <task>`; extra CLI args go after `--`):
+Run `mise tasks` to list them.
 
 | Task | Does |
 |---|---|
-| `pixi run decode [args]` | the CLI |
-| `pixi run gui` | open the GUI |
-| `pixi run sim` | simulated source, channel 0, 10 s |
-| `pixi run test` | test suite (hermetic, no SDR; GUI widget tests run offscreen) |
-| `pixi run hardware-test` | opt-in real RTL-SDR test (sets `EGGTIMER_HARDWARE=1`); see `docs/HARDWARE_TEST.md` |
+| `mise run decode -- [args]` | the CLI |
+| `mise run gui` | open the GUI |
+| `mise run sim` | simulated source, channel 0, 10 s |
+| `mise run test` | test suite (hermetic, no SDR; GUI widget tests run offscreen) |
+| `mise run hardware-test` | opt-in real RTL-SDR test; see `docs/HARDWARE_TEST.md` |
 
 ### Extending
 
