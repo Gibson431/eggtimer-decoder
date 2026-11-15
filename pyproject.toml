@@ -32,6 +32,7 @@ numpy = "*"
 gnuradio-osmosdr = "*"
 rtl-sdr = "*"
 pytest = "*"
+pyside6 = ">=6.11.3,<7"
 
 [tool.pixi.pypi-dependencies]
 eggtimer-decoder = { path = ".", editable = true }

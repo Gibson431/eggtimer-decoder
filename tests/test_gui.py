@@ -207,23 +207,21 @@ def test_controller_with_live_sim_receiver(tmp_path):
     assert c.receiver.state == ReceiverState.STOPPED
 
 
-# -- widget smoke tests (need a display) --------------------------------------
-def _display_or_skip():
-    tk = pytest.importorskip("tkinter")
-    try:
-        root = tk.Tk()
-    except tk.TclError as e:
-        pytest.skip(f"no display available for tkinter widgets ({e})")
-    return root
+# -- widget smoke tests (Qt, offscreen: no display needed) ---------------------
+@pytest.fixture(scope="module")
+def qapp():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+
+    return QApplication.instance() or QApplication([])
 
 
-def test_gui_main_autoclose_sim(tmp_path, monkeypatch):
-    _display_or_skip().destroy()
+def test_gui_main_autoclose_sim(qapp, tmp_path, monkeypatch):
     from eggtimer_decoder import gui
-
-    cfg = tmp_path / "settings.json"
     from eggtimer_decoder.settings import save_settings
 
+    cfg = tmp_path / "settings.json"
     save_settings(Settings(device="sim", channel=1), cfg)
     monkeypatch.setenv("EGGTIMER_CONFIG", str(cfg))
     for k in list(os.environ):
@@ -232,30 +230,28 @@ def test_gui_main_autoclose_sim(tmp_path, monkeypatch):
     assert gui.main(autoclose_ms=1500) == 0
 
 
-def test_gui_apply_validates_and_persists(tmp_path):
-    root = _display_or_skip()
+def test_gui_apply_validates_and_persists(qapp, tmp_path):
     from eggtimer_decoder.gui import App
 
     cfg = tmp_path / "s.json"
-    app = App(root, Settings(device="sim"), receiver_factory=FakeReceiver, path=cfg, discover=lambda: [], autostart=True)
+    app = App(Settings(device="sim"), receiver_factory=FakeReceiver, path=cfg, discover=lambda: [], autostart=True)
     try:
-        app.vars["freq_mhz"].set("bogus")
+        app.freq_edit.setText("bogus")
         app.apply()
-        assert "frequency" in app.error_var.get().lower() or "parse" in app.error_var.get().lower()
+        assert "frequency" in app.error_label.text().lower() or "parse" in app.error_label.text().lower()
         assert not cfg.exists()
-        app.vars["freq_mhz"].set("920.5")
-        app.vars["channel"].set("5")
+        app.freq_edit.setText("920.5")
+        app.channel_box.setCurrentText("5")
         app.apply()
-        assert app.error_var.get() == ""
+        assert app.error_label.text() == ""
         assert ("channel", 5) in app.controller.receiver.calls
         assert load_settings_file(cfg)[0]["center_freq_hz"] == 920.5e6
         # events from "another thread" show up after a poll
         app.controller.receiver.subs[0](FrameEvent(b"hi", 1.0))
-        root.update()
         deadline = time.time() + 2
-        while time.time() < deadline and not app.tree.get_children():
-            root.update()
+        while time.time() < deadline and not app.tree.topLevelItemCount():
+            qapp.processEvents()
             time.sleep(0.02)
-        assert len(app.tree.get_children()) >= 1
+        assert app.tree.topLevelItemCount() >= 1
     finally:
-        app.close()
+        app.close_app()

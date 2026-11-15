@@ -1,7 +1,7 @@
 # Eggtimer Decoder
 
 Live decoder for Eggtimer / Eggfinder TX packets (Si1000, 2-FSK, 9600 baud) from an RTL-SDR
-or a built-in simulated source. It has a CLI and a small tkinter GUI. You choose the device,
+or a built-in simulated source. It has a CLI and a small Qt (PySide6) GUI. You choose the device,
 centre frequency (default 921 MHz) and channel 0-8; each channel is a row of parameters plus
 a frequency offset from the centre (see `docs/CHANNELS.md`).
 
@@ -51,7 +51,7 @@ Shortcuts defined in `pyproject.toml` (also available as `mise run <task>`; extr
 | `pixi run decode [args]` | the CLI |
 | `pixi run gui` | open the GUI |
 | `pixi run sim` | simulated source, channel 0, 10 s |
-| `pixi run test` | test suite (hermetic, no SDR; GUI widget tests skip without a display) |
+| `pixi run test` | test suite (hermetic, no SDR; GUI widget tests run offscreen) |
 | `pixi run hardware-test` | opt-in real RTL-SDR test (sets `EGGTIMER_HARDWARE=1`); see `docs/HARDWARE_TEST.md` |
 
 ## Architecture
@@ -69,7 +69,7 @@ All code is in `src/eggtimer_decoder/`. The core knows nothing about the interfa
 - `signal_metrics.py`: signal strength, carrier offset, presence.
 - `receiver.py`: `LiveReceiver`, which ties it together; frequency/channel change apply live, device change restarts.
 - `sinks.py`: `ConsoleSink`, `JsonLogSink`, `LastPositionStore` (plain `Event -> None` callables).
-- `cli.py`: argparse entry point; `gui.py` (tkinter widgets) and `gui_model.py` (testable view model).
+- `cli.py`: argparse entry point; `gui.py` (Qt widgets) and `gui_model.py` (testable view model).
 - `config.py` (`RadioConfig`, used by channels), `simulate.py` (signal generator behind the simulated source), `demod_gnuradio.py` (offline GNU Radio decode, used in tests), `rtlsdr.py` (original one-shot capture; superseded by `sdr.py`).
 
 ### Extending
