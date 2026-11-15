@@ -2,9 +2,21 @@
 pixi = "0.84"
 
 [tasks.decode]
-description = "Run the decoder via pixi"
+description = "Run the CLI (pass args after --, e.g. -- channels)"
 run = "pixi run decode"
 
+[tasks.gui]
+description = "Open the GUI"
+run = "pixi run gui"
+
+[tasks.sim]
+description = "Decode the simulated source on channel 0 for 10 s"
+run = "pixi run sim"
+
 [tasks.test]
-description = "Run the test suite via pixi"
+description = "Run the test suite (no SDR needed)"
 run = "pixi run test"
+
+[tasks.hardware-test]
+description = "Opt-in test against a real RTL-SDR"
+run = "pixi run hardware-test"

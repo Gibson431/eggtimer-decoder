@@ -1,7 +1,7 @@
 [project]
 name = "eggtimer-decoder"
 version = "0.1.0"
-description = "Add your description here"
+description = "Live decoder for Eggtimer/Eggfinder TX 2-FSK packets from an RTL-SDR or a simulated source"
 authors = [
     { name = "Gibson431", email = "timmaxgibson@gmail.com" }
 ]
@@ -38,7 +38,10 @@ eggtimer-decoder = { path = ".", editable = true }
 
 [tool.pixi.tasks]
 decode = "eggtimer-decoder"
+gui = "eggtimer-decoder"
+sim = "eggtimer-decoder run --device sim --channel 0 --duration 10"
 test = "pytest -q"
+hardware-test = { cmd = "pytest -m hardware -s -rs tests/test_hardware.py", env = { EGGTIMER_HARDWARE = "1" } }
 
 [tool.pytest.ini_options]
 markers = [
